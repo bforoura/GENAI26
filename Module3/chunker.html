@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Paragraph Chunking Lab</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; line-height: 1.8; max-width: 1000px; margin: 20px auto; padding: 20px; background: #f4f7f9; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .panel { background: #ffffff; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #e1e8ed; display: flex; flex-direction: column; gap: 15px; }
+        .slider-row { display: flex; align-items: center; gap: 20px; }
+        input[type=range] { flex-grow: 1; height: 8px; border-radius: 5px; background: #d7dcdf; outline: none; -webkit-appearance: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #4a90e2; border-radius: 50%; cursor: pointer; }
+
+        .btn-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; cursor: pointer; border: 2px solid #4a90e2; border-radius: 8px; background: white; color: #4a90e2; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #f0f7ff; }
+        button.active { background: #4a90e2; color: white; }
+
+        #stats-bar { font-size: 0.9rem; color: #666; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        #text-container { padding: 25px; background: #fff; border: 1px solid #e1e8ed; border-radius: 10px; min-height: 500px; white-space: pre-wrap; font-size: 1.1rem; }
+
+        /* Highlight Colors */
+        .chunk-0 { background: #ffadad; } .chunk-1 { background: #ffd6a5; }
+        .chunk-2 { background: #fdffb6; } .chunk-3 { background: #caffbf; }
+        .chunk-4 { background: #9bf6ff; } .chunk-5 { background: #a0c4ff; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="panel">
+        <div class="slider-row">
+            <label><strong>Target Chunk Size:</strong></label>
+            <input type="range" id="sizeSlider" min="100" max="2000" value="600" oninput="updateUI()">
+            <span style="min-width: 100px;"><strong><span id="sizeVal">600</span> chars</strong></span>
+        </div>
+        <div class="btn-group">
+            <button id="btn-fixed" onclick="setMode('fixed')">Fixed Size</button>
+            <button id="btn-recursive" onclick="setMode('recursive')">Recursive (Smart)</button>
+            <button id="btn-semantic" onclick="setMode('semantic')">Semantic (Static)</button>
+        </div>
+    </div>
+
+    <div id="stats-bar">
+        <span id="mode-desc">Current Mode: Fixed</span>
+        <span id="chunk-count">Chunks: 0</span>
+    </div>
+
+    <div id="text-container"></div>
+</div>
+
+<script>
+    let currentMode = 'fixed';
+    const sampleText = `The evolution of Large Language Models (LLMs) represents a significant leap in artificial intelligence. Historically, NLP relied on rule-based systems and simple statistical models that struggled with the nuance of human language. The introduction of the Transformer architecture in 2017 changed everything, allowing models to process entire sequences of text simultaneously rather than word-by-word, leading to the massive scale we see in models today.
+
+Training these models involves feeding them billions of pages of text from the internet, books, and code. During this process, the model learns the statistical relationships between words, which enables it to predict the next token in a sequence with startling accuracy. However, this is not just "stochastic parroting"; the models develop internal representations of logic, world facts, and even some degree of common sense reasoning.
+
+In practical applications, these models are often used in RAG (Retrieval-Augmented Generation) systems. Because an LLM has a limited "context window," it cannot remember every detail of a 500-page manual at once. Instead, developers break documents into "chunks" and store them in a vector database. When a user asks a question, the system retrieves only the most relevant chunks to feed into the model's brain.
+
+The challenge of chunking lies in balancing context and precision. If chunks are too small, they lose the surrounding meaning (semantic context). If they are too large, they might include irrelevant "noise" that confuses the model or exceeds its memory limits. Choosing between fixed-size splitting and semantic-based splitting is therefore one of the most critical decisions a developer makes when building AI applications.`;
+
+    function updateUI() {
+        document.getElementById('sizeVal').innerText = document.getElementById('sizeSlider').value;
+        render();
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${mode}`).classList.add('active');
+        document.getElementById('mode-desc').innerText = "Current Mode: " + mode.charAt(0).toUpperCase() + mode.slice(1);
+        render();
+    }
+
+    function render() {
+        const size = parseInt(document.getElementById('sizeSlider').value);
+        const container = document.getElementById('text-container');
+        container.innerHTML = "";
+        let chunks = [];
+
+        if (currentMode === 'fixed') {
+            for (let i = 0; i < sampleText.length; i += size) {
+                chunks.push(sampleText.substring(i, i + size));
+            }
+        } else if (currentMode === 'recursive') {
+            // Simplified Recursive Logic: Split by double newline, then single, then sentence
+            let paragraphs = sampleText.split("\n\n");
+            paragraphs.forEach(p => {
+                if (p.length <= size) {
+                    chunks.push(p + "\n\n");
+                } else {
+                    let sentences = p.split(/(?<=\. )/);
+                    let currentChunk = "";
+                    sentences.forEach(s => {
+                        if ((currentChunk + s).length <= size) {
+                            currentChunk += s;
+                        } else {
+                            if (currentChunk) chunks.push(currentChunk);
+                            currentChunk = s;
+                        }
+                    });
+                    if (currentChunk) chunks.push(currentChunk + "\n\n");
+                }
+            });
+        } else {
+            // Semantic: Topic 1 (History/Theory) vs Topic 2 (RAG/Implementation)
+            const mid = sampleText.indexOf("In practical applications");
+            chunks.push(sampleText.substring(0, mid));
+            chunks.push(sampleText.substring(mid));
+        }
+
+        document.getElementById('chunk-count').innerText = "Chunks: " + chunks.length;
+
+        chunks.forEach((c, i) => {
+            const span = document.createElement('span');
+            span.innerText = c;
+            span.className = `chunk-${i % 6}`;
+            container.appendChild(span);
+        });
+    }
+
+    setMode('fixed');
+</script>
+</body>
+</html>

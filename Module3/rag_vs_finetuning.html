@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Engineering vs. RAG vs. Fine-Tuning</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .method-card { transition: all 0.3s ease; border: 2px solid transparent; }
+        .method-card.active { border-color: #3b82f6; background-color: #f0f7ff; }
+        .logic-flow { font-family: 'Fira Code', monospace; font-size: 0.85rem; }
+        .evolution-step { position: relative; }
+        .evolution-step:not(:last-child)::after { content: '→'; position: absolute; right: -15px; top: 50%; transform: translateY(-50%); color: #cbd5e1; font-weight: bold; }
+        #ft-cycle { transition: opacity 0.5s ease, transform 0.5s ease; }
+        .hidden-cycle { opacity: 0; transform: translateY(10px); pointer-events: none; }
+        .visible-cycle { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-10">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 border-b border-gray-200 pb-6">
+            <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Prompt Engineering vs. RAG vs. Fine-Tuning</h1>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div id="card-prompt" onclick="updateApp('prompt')" class="method-card active bg-white p-6 rounded-xl cursor-pointer shadow-sm border-gray-200 border text-center md:text-left">
+                <h2 class="text-blue-600 font-bold mb-2 uppercase text-xs tracking-wider">01. Instruction Layer</h2>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Prompt Engineering</h3>
+                <ul class="text-xs space-y-2 text-gray-500">
+                    <li>• Weights: <b>Frozen</b></li>
+                    <li>• Context: <b>In-Prompt</b></li>
+                    <li>• Scope: <b>Standard LLM Usage</b></li>
+                </ul>
+            </div>
+
+            <div id="card-rag" onclick="updateApp('rag')" class="method-card bg-white p-6 rounded-xl cursor-pointer shadow-sm border-gray-200 border text-center md:text-left">
+                <h2 class="text-green-600 font-bold mb-2 uppercase text-xs tracking-wider">02. Memory Layer</h2>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">RAG (Retrieval)</h3>
+                <ul class="text-xs space-y-2 text-gray-500">
+                    <li>• Weights: <b>Frozen</b></li>
+                    <li>• Context: <b>Vector Database</b></li>
+                    <li>• Scope: <b>Dynamic/Private Data</b></li>
+                </ul>
+            </div>
+
+            <div id="card-fine" onclick="updateApp('fine')" class="method-card bg-white p-6 rounded-xl cursor-pointer shadow-sm border-gray-200 border text-center md:text-left">
+                <h2 class="text-purple-600 font-bold mb-2 uppercase text-xs tracking-wider">03. Weight Layer</h2>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Fine-Tuning</h3>
+                <ul class="text-xs space-y-2 text-gray-500">
+                    <li>• Weights: <b>Modified</b></li>
+                    <li>• Context: <b>Static Weights</b></li>
+                    <li>• Scope: <b>Domain Specialization</b></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-8 border border-gray-200 shadow-xl">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+
+                <div>
+                    <h3 class="text-sm uppercase tracking-widest text-gray-400 font-bold mb-4">Implementation Logic</h3>
+                    <div id="logic-display" class="logic-flow bg-gray-900 p-6 rounded-lg border border-gray-800 leading-relaxed text-blue-300 min-h-[160px]"></div>
+
+                    <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <h4 class="text-xs font-bold text-gray-500 uppercase tracking-tighter">Conceptual Analogy</h4>
+                        <p id="analogy-text" class="text-sm italic text-gray-700 mt-1"></p>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-sm uppercase tracking-widest text-gray-400 font-bold mb-4">Technical Specs</h3>
+                    <table class="w-full text-sm text-left mb-6">
+                        <tr class="border-b border-gray-100"><td class="py-3 text-gray-500">Knowledge Update</td><td id="td-update" class="py-3 font-mono text-gray-900"></td></tr>
+                        <tr class="border-b border-gray-100"><td class="py-3 text-gray-500">Data Transparency</td><td id="td-trans" class="py-3 font-mono text-gray-900"></td></tr>
+                        <tr class="border-b border-gray-100"><td class="py-3 text-gray-500">Resource Intensity</td><td id="td-cost" class="py-3 font-mono text-gray-900"></td></tr>
+                        <tr><td class="py-3 text-gray-500">Hallucination Risk</td><td id="td-hall" class="py-3 font-mono text-gray-900"></td></tr>
+                    </table>
+
+                    <div id="ft-cycle" class="pt-6 border-t border-gray-100 hidden-cycle">
+                        <h3 class="text-xs uppercase tracking-widest text-purple-600 font-bold mb-4">Model Development Cycle</h3>
+                        <div class="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                            <div class="evolution-step text-center px-2">
+                                <p class="text-xs font-bold text-gray-900">Pre-training</p>
+                                <p class="text-[9px] text-gray-400 uppercase">Scholar</p>
+                            </div>
+                            <div class="evolution-step text-center px-2">
+                                <p class="text-xs font-bold text-gray-900">SFT</p>
+                                <p class="text-[9px] text-purple-500 uppercase">Assistant</p>
+                            </div>
+                            <div class="text-center px-2">
+                                <p class="text-xs font-bold text-gray-900">RLHF</p>
+                                <p class="text-[9px] text-yellow-600 uppercase">Polished</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="text-[11px] font-bold text-gray-700 uppercase">1. Pre-training (The Base Model)</h4>
+                                <p class="text-[11px] text-gray-500 leading-normal">Basically <b>"Autocomplete on Steroids."</b> The model has no concept of a "chat"—it is mathematically driven to generate the next most likely token. It absorbs facts and grammar but won't follow instructions reliably.</p>
+                            </div>
+                            <div>
+                                <h4 class="text-[11px] font-bold text-purple-700 uppercase">2. Supervised Fine-Tuning (SFT)</h4>
+                                <p class="text-[11px] text-gray-500 leading-normal">The model is fed thousands of <b>[Prompt + Expected Output]</b> pairs. This "Supervised" layer breaks the autocomplete cycle and teaches the model how to act as an assistant that responds to queries rather than just extending text.</p>
+                            </div>
+                            <div>
+                                <h4 class="text-[11px] font-bold text-yellow-700 uppercase">3. RLHF (Alignment)</h4>
+                                <p class="text-[11px] text-gray-500 leading-normal"><b>Human judges</b> rank various model outputs to "reward" helpfulness and "punish" toxicity or hallucinations. This final polish aligns the assistant's behavior with human values, tone, and safety guardrails.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const content = {
+            prompt: {
+                logic: `// Prompt Engineering Logic<br>$input = "Summarize the transcript";<br>$sys_instructions = "Use bullet points";<br><br><span class="text-blue-300">Payload = $sys_instructions + $input;</span><br><span class="text-yellow-400">LLM_Generate(Payload);</span>`,
+                analogy: "The Open-Book Exam: The student hasn't studied the specific topic, but has a high-quality cheat sheet provided right before the test.",
+                update: "Instant", trans: "High (Full visibility)", cost: "Low (Inference)", hall: "Significant"
+            },
+            rag: {
+                logic: `// RAG Logic<br>$input = "User query";<br><span class="text-green-400">$context = VectorDB.query($input);</span><br>$prompt = "Context: " + $context + $input;<br><br><span class="text-yellow-500">LLM_Generate($prompt);</span>`,
+                analogy: "The Library: The model is a researcher with access to an infinite library. It looks up the facts first, then synthesizes the answer.",
+                update: "Easy (Live docs)", trans: "Highest (Citations)", cost: "Moderate (DB search)", hall: "Minimized"
+            },
+            fine: {
+                logic: `// Fine-Tuning Logic<br>$dataset = Load("domain_data.jsonl");<br><span class="text-purple-400">Update_Weights($dataset);</span><br><br><span class="text-yellow-500">Optimized_Model.generate($input);</span>`,
+                analogy: "Muscle Memory: Through intense training, the model has 'absorbed' the domain knowledge until it becomes its natural intuition.",
+                update: "Hard (Re-train)", trans: "Low (Black Box)", cost: "High (Compute)", hall: "Variable"
+            }
+        };
+
+        function updateApp(type) {
+            document.querySelectorAll('.method-card').forEach(c => c.classList.remove('active'));
+            document.getElementById('card-' + type).classList.add('active');
+            document.getElementById('logic-display').innerHTML = content[type].logic;
+            document.getElementById('analogy-text').innerText = content[type].analogy;
+            document.getElementById('td-update').innerText = content[type].update;
+            document.getElementById('td-trans').innerText = content[type].trans;
+            document.getElementById('td-cost').innerText = content[type].cost;
+            document.getElementById('td-hall').innerText = content[type].hall;
+
+            const cycle = document.getElementById('ft-cycle');
+            if (type === 'fine') {
+                cycle.classList.replace('hidden-cycle', 'visible-cycle');
+            } else {
+                cycle.classList.replace('visible-cycle', 'hidden-cycle');
+            }
+        }
+        window.onload = () => updateApp('prompt');
+    </script>
+</body>
+</html>
