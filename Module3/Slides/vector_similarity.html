@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Semantic Vector Visualizer</title>
+    <style>
+        :root { --primary: #4a90e2; --secondary: #e74c3c; --bg: #f4f7f6; --math-bg: #fffbe6; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .app-container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 1100px; width: 100%; }
+        .main-layout { display: flex; gap: 30px; width: 100%; align-items: flex-start; flex-wrap: wrap; }
+        canvas { border: 2px solid #eee; border-radius: 50%; background: #fff; box-shadow: inset 0 0 10px rgba(0,0,0,0.05); flex-shrink: 0; }
+
+        .sidebar { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; }
+        .theory-panel { background: var(--math-bg); padding: 20px; border-radius: 10px; border: 1px solid #ffe58f; font-size: 0.95rem; line-height: 1.6; color: #856404; }
+
+        .input-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+        input { padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; }
+        .stats { background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #eee; text-align: center; }
+        .similarity-score { font-size: 2.2rem; font-weight: bold; margin: 5px 0; }
+
+        /* Math Formatting */
+        .math-block { display: block; text-align: center; margin: 12px 0; font-family: "Times New Roman", serif; font-size: 1.1rem; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 5px; }
+        .fraction { display: inline-block; vertical-align: middle; text-align: center; margin: 0 5px; }
+        .fraction span { display: block; padding: 0 5px; }
+        .fraction .numerator { border-bottom: 1px solid #856404; }
+
+        .term-a { color: var(--primary); font-weight: bold; }
+        .term-b { color: var(--secondary); font-weight: bold; }
+
+        /* Library Section */
+        .library-section { margin-top: 15px; padding: 15px; border: 1px solid #eee; border-radius: 8px; background: #fff; }
+        .library-title { font-weight: bold; font-size: 0.85rem; color: #555; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tag-container { display: flex; flex-wrap: wrap; gap: 6px; }
+        .word-tag { background: #eef2f7; color: #4a90e2; padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 500; cursor: default; transition: background 0.2s; }
+        .word-tag:hover { background: #dbe4f0; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>Semantic Vector Visualizer</h2>
+
+    <div class="main-layout">
+        <canvas id="vectorCanvas" width="400" height="400"></canvas>
+
+        <div class="sidebar">
+            <div class="input-group">
+                <label class="term-a">Phrase A:</label>
+                <input type="text" id="inputA" value="King">
+            </div>
+            <div class="input-group">
+                <label class="term-b">Phrase B:</label>
+                <input type="text" id="inputB" value="Queen">
+            </div>
+
+            <div class="stats">
+                <strong>Cosine Similarity Score:</strong>
+                <div class="similarity-score" id="score">0.000</div>
+                <div id="live-calc" style="font-family: monospace; font-size: 0.85rem; color: #666; margin-bottom: 5px;"></div>
+                <div>Angle Difference: <span id="angleText" style="font-weight: bold;">0°</span></div>
+            </div>
+
+            <div class="library-section">
+                <div class="library-title">Known Word Library</div>
+                <div class="tag-container" id="libraryTags"></div>
+            </div>
+
+            <div class="theory-panel">
+                <strong>1. Normalization (Unit Length)</strong>
+                <div class="math-block">
+                    V<sub>norm</sub> =
+                    <div class="fraction">
+                        <span class="numerator">V</span>
+                        <span>√ (x² + y²)</span>
+                    </div>
+                </div>
+                Scaling vectors to a length of 1 ensures we compare <b>direction</b>, not word count or intensity.
+
+                <hr style="border: 0; border-top: 1px solid #ffe58f; margin: 15px 0;">
+
+                <strong>2. The Dot Product</strong>
+                <div class="math-block">
+                    A · B = (x<sub>A</sub> * x<sub>B</sub>) + (y<sub>A</sub> * y<sub>B</sub>)
+                </div>
+                In normalized space, this value is the <b>Cosine Similarity</b>.
+
+                <hr style="border: 0; border-top: 1px solid #ffe58f; margin: 15px 0;">
+
+                <strong>3. Why use Cosine?</strong>
+                <div class="math-block">
+                    Similarity = cos(θ)
+                </div>
+                If θ is 0°, similarity is 1.0 (Identical).<br>
+                If θ is 90°, similarity is 0.0 (Unrelated).
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const library = {
+        "king":      { x: 0.3,  y: 0.9 },
+        "queen":     { x: 0.4,  y: 0.85 },
+        "apple":     { x: -0.8, y: 0.2 },
+        "banana":    { x: -0.75,y: 0.3 },
+        "computer":  { x: 0.1,  y: -0.9 },
+        "laptop":    { x: 0.15, y: -0.85 },
+        "fruit":     { x: -0.9, y: 0.1 },
+        "throne":    { x: 0.2,  y: 0.95 },
+        "technology":{ x: 0.3,  y: -0.7 },
+        "orange":    { x: -0.85,y: 0.15 },
+        "palace":    { x: 0.5,  y: 0.75 },
+        "software":  { x: 0.05, y: -0.95 }
+    };
+
+    const canvas = document.getElementById('vectorCanvas');
+    const ctx = canvas.getContext('2d');
+    const centerX = 200;
+    const centerY = 200;
+    const radius = 160;
+
+    // Display the library tags on screen
+    function initLibraryDisplay() {
+        const container = document.getElementById('libraryTags');
+        Object.keys(library).forEach(word => {
+            const tag = document.createElement('span');
+            tag.className = 'word-tag';
+            tag.innerText = word;
+            container.appendChild(tag);
+        });
+    }
+
+    function getEmbedding(text) {
+        const clean = text.toLowerCase().trim();
+        if (library[clean]) return library[clean];
+        let hash = 0;
+        for (let i = 0; i < clean.length; i++) hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+        return { x: Math.cos(hash), y: Math.sin(hash) };
+    }
+
+    function draw() {
+        const valA = document.getElementById('inputA').value || " ";
+        const valB = document.getElementById('inputB').value || " ";
+        const embA = getEmbedding(valA);
+        const embB = getEmbedding(valB);
+
+        ctx.clearRect(0, 0, 400, 400);
+
+        // Draw Circle
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.stroke();
+
+        // Draw Axes
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(centerX - radius - 20, centerY); ctx.lineTo(centerX + radius + 20, centerY);
+        ctx.moveTo(centerX, centerY - radius - 20); ctx.lineTo(centerX, centerY + radius + 20);
+        ctx.strokeStyle = '#ddd';
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const vecA = normalize(embA);
+        const vecB = normalize(embB);
+
+        renderVector(vecA, '#4a90e2', valA);
+        renderVector(vecB, '#e74c3c', valB);
+
+        const dotProduct = (vecA.x * vecB.x) + (vecA.y * vecB.y);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct))) * (180 / Math.PI);
+
+        // Update Score and Trace
+        const scoreEl = document.getElementById('score');
+        scoreEl.innerText = dotProduct.toFixed(3);
+        document.getElementById('angleText').innerText = angle.toFixed(1) + "°";
+
+        document.getElementById('live-calc').innerText =
+            `(${vecA.x.toFixed(2)} * ${vecB.x.toFixed(2)}) + (${vecA.y.toFixed(2)} * ${vecB.y.toFixed(2)})`;
+
+        const hue = Math.max(0, dotProduct * 120);
+        scoreEl.style.color = `hsl(${hue}, 70%, 45%)`;
+    }
+
+    function normalize(emb) {
+        const mag = Math.sqrt(emb.x * emb.x + emb.y * emb.y) || 1;
+        return { x: emb.x / mag, y: emb.y / mag };
+    }
+
+    function renderVector(vec, color, label) {
+        const tx = centerX + vec.x * radius;
+        const ty = centerY - vec.y * radius;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(tx, ty);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(tx, ty, 7, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 13px Segoe UI';
+        ctx.textAlign = (vec.x > 0) ? 'left' : 'right';
+        ctx.fillText(label.toUpperCase(), tx + (vec.x > 0 ? 12 : -12), ty);
+    }
+
+    document.getElementById('inputA').addEventListener('input', draw);
+    document.getElementById('inputB').addEventListener('input', draw);
+
+    window.onload = () => {
+        initLibraryDisplay();
+        draw();
+    };
+</script>
+</body>
+</html>
