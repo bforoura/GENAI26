@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RAG Pipeline Simulator - Verified</title>
+    <title>RAG Pipeline Simulator</title>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --success: #27ae60; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; display: flex; flex-direction: column; align-items: center; }
@@ -76,7 +76,7 @@
             <strong>Stage A: Chunking</strong>
             <p id="chunk-meta">Waiting...</p>
             <div class="info-note">
-                <strong>Semantic Chunking:</strong><br>
+                <strong>Semantic Chunking:</strong><br><br>
                 Instead of cutting text at fixed intervals, we group text based on <strong>meaning</strong>. By ensuring each chunk covers a complete thought, the resulting vector is more precise and retrieval becomes more accurate.
             </div>
         </div>
@@ -85,17 +85,9 @@
             <strong>Stage B: Embedding</strong>
             <div id="vector-list"></div>
             <div class="info-note">
-                <strong>V<sub>chunk</sub> Representation:</strong><br>
-                A single chunk contains many words, but is represented by only one vector. This vector is the <strong>mean pool</strong> (average) of every individual word vector within that chunk:
-                <div class="math-text">
-                    V<sub>chunk</sub> =
-                    <div class="fraction">
-                        <span class="num">1</span>
-                        <span>n</span>
-                    </div>
-                    Σ V<sub>word<sub>i</sub></sub>
-                </div>
-                This "compresses" the collective meaning of the entire sentence into a single point in space.
+                <strong>V<sub>chunk</sub> Representation:</strong><br><br>
+                A single chunk contains many words, but is represented by only one vector. This vector is the <strong>semantic mean pool</strong> of every individual word vector within that chunk.
+                <br><br>This <b>"compresses"</b> the collective meaning of the entire sentence into a single point in space.
             </div>
         </div>
 
@@ -104,13 +96,13 @@
             <div id="ranking-list">Waiting for search...</div>
 
             <div class="info-note">
-                <strong>Note on Vector Matching:</strong><br>
+                <strong>Note on Vector Matching:</strong><br><br>
                 Both the <strong>document chunks</strong> and your <strong>query</strong> are converted into vectors using the same embedding model. The system then compares the query vector to all chunk vectors to find the closest match.
             </div>
 
             <div class="info-note">
-                <strong>Note on Similarity Scores:</strong><br>
-                Even if a specific word is missing from a chunk, the system may still report a small similarity percentage (e.g., 5-8%) because vector math measures mathematical "closeness" in general meaning rather than just keyword presence.
+                <strong>Note on Similarity Scores:</strong><br><br>
+                Even if a specific word is missing from a chunk, the system may still report a small similarity percentage; e.g., 5-8%.<br><br> This is because vector math measures mathematical <b>"closeness"</b> in general meaning rather than just keyword presence.
             </div>
         </div>
 

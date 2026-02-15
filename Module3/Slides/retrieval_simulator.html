@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive Vector Explorer</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --vector-q: #2563eb; --vector-c: #dc2626; --success: #16a34a; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 1200px; width: 100%; display: grid; grid-template-columns: 420px 1fr 340px; gap: 24px; }
+        .card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; position: relative; }
+        .header-card { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; }
+        .input-group { display: flex; gap: 8px; }
+        input { flex-grow: 1; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; outline: none; }
+        button { padding: 12px 24px; background: var(--primary); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; }
+
+        canvas { background: white; border-radius: 50%; display: block; margin: 10px auto; cursor: crosshair; }
+
+        /* Tooltip Styling */
+        #tooltip {
+            position: absolute;
+            background: #1e293b;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            max-width: 200px;
+            line-height: 1.4;
+        }
+
+        .db-item { padding: 14px; border: 1px solid #f1f5f9; margin-bottom: 12px; border-radius: 10px; font-size: 0.85rem; background: #fff; line-height: 1.4; transition: all 0.2s; }
+        .chunk-label { color: var(--vector-c); font-weight: 800; font-size: 0.9rem; margin-right: 5px; }
+        .original-text { color: #334155; font-style: italic; display: block; margin: 4px 0; }
+        .vector-notation { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #475569; display: block; background: #f8fafc; padding: 6px; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 5px; }
+
+        .rank-winner { border-left: 5px solid var(--success); background: #f0fdf4; border-color: var(--success); }
+        .score-badge { float: right; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; color: white; }
+        .math-panel { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; background: #0f172a; color: #f8fafc; padding: 16px; border-radius: 12px; line-height: 1.6; }
+        .highlight { color: #38bdf8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card header-card">
+        <h2 style="margin:0">Vector Retrieval Simulator</h2>
+        <div class="input-group">
+            <input type="text" id="userInput" placeholder="Ask about 'Grounding', 'Transformers'...">
+            <button onclick="runRetrieval()">Query Vector DB</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0">1. Vectorized Database</h3>
+        <div id="db-list"></div>
+    </div>
+
+    <div class="card" style="text-align: center;">
+        <h3 style="margin-top:0">2. Latent Space Visualization</h3>
+        <canvas id="vizCanvas" width="380" height="380"></canvas>
+        <div id="tooltip"></div>
+        <div id="math-display" class="math-panel">Hover over red dots for keywords...</div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0">3. Similarity Ranking</h3>
+        <div id="ranking-container"></div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('vizCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    const cx = 190, cy = 190, r = 150;
+    let lastQueryAngle = null;
+
+    const chunks = [
+        { id: 1, angle: 0.5, text: "The Transformer architecture uses Self-Attention to process sequence data.", kw: ["transformer", "attention", "encoder", "decoder", "sequence", "self-attention"] },
+        { id: 2, angle: 1.8, text: "Large Language Models are pre-trained on diverse internet datasets.", kw: ["llm", "training", "model", "datasets", "pre-training", "tokenization"] },
+        { id: 3, angle: 3.5, text: "Retrieval Augmented Generation improves LLM accuracy by providing context.", kw: ["rag", "retrieval", "augmented", "context", "grounding", "knowledge"] },
+        { id: 4, angle: 4.8, text: "Vector Databases store high-dimensional embeddings for semantic search.", kw: ["vector", "embeddings", "database", "semantic", "search"] },
+        { id: 5, angle: 5.8, text: "Hallucinations occur when LLMs generate factually incorrect but fluent text.", kw: ["hallucinations", "incorrect", "fluent", "fact", "accuracy", "confabulation"] }
+    ];
+
+    function init() { renderDB(); draw(null); }
+
+    function getVecCoords(angle) {
+        return `[${Math.cos(angle).toFixed(3)}, ${Math.sin(angle).toFixed(3)}]`;
+    }
+
+    function renderDB() {
+        const list = document.getElementById('db-list');
+        list.innerHTML = chunks.map(c => `
+            <div class="db-item" id="db-${c.id}">
+                <span class="chunk-label">CHUNK C${c.id}</span>
+                <span class="original-text">"${c.text}"</span>
+                <code class="vector-notation">V_C${c.id} = ${getVecCoords(c.angle)}</code>
+            </div>
+        `).join('');
+    }
+
+    function draw(qAngle) {
+        ctx.clearRect(0, 0, 380, 380);
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = '#e2e8f0'; ctx.stroke();
+
+        chunks.forEach(c => {
+            const x = cx + Math.cos(c.angle) * r;
+            const y = cy + Math.sin(c.angle) * r;
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y);
+            ctx.strokeStyle = 'rgba(220, 38, 38, 0.15)'; ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#dc2626'; ctx.fill();
+
+            ctx.fillStyle = '#1e293b';
+            ctx.font = "bold 14px monospace";
+            const lx = cx + Math.cos(c.angle) * (r + 22);
+            const ly = cy + Math.sin(c.angle) * (r + 22);
+            ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText(`C${c.id}`, lx, ly);
+        });
+
+        if (qAngle !== null) {
+            const qx = cx + Math.cos(qAngle) * r;
+            const qy = cy + Math.sin(qAngle) * r;
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(qx, qy);
+            ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 4; ctx.stroke();
+            ctx.beginPath(); ctx.arc(qx, qy, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#2563eb'; ctx.fill();
+        }
+    }
+
+    // HOVER DETECTION
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        let hovered = null;
+
+        chunks.forEach(c => {
+            const x = cx + Math.cos(c.angle) * r;
+            const y = cy + Math.sin(c.angle) * r;
+            const dist = Math.sqrt((mx - x)**2 + (my - y)**2);
+            if (dist < 12) hovered = c; // "Hit" radius
+        });
+
+        if (hovered) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = mx + 15 + 'px';
+            tooltip.style.top = my + 15 + 'px';
+            tooltip.innerHTML = `<strong>C${hovered.id} Keywords:</strong><br>${hovered.kw.join(', ')}`;
+        } else {
+            tooltip.style.display = 'none';
+        }
+    });
+
+    function getAngle(query) {
+        let q = query.toLowerCase();
+        let base = null;
+        for (let c of chunks) {
+            if (c.kw.some(k => q.includes(k))) { base = c.angle; break; }
+        }
+        if (base === null) {
+            let h = 0;
+            for (let i = 0; i < q.length; i++) h = ((h << 5) - h) + q.charCodeAt(i);
+            return (Math.abs(h) % 628) / 100;
+        }
+        let jitter = (q.split('').reduce((a,b)=>a+b.charCodeAt(0),0) % 30 - 15) / 100;
+        return base + jitter;
+    }
+
+    function runRetrieval() {
+        const query = document.getElementById('userInput').value.trim();
+        if (!query) return;
+        lastQueryAngle = getAngle(query);
+        draw(lastQueryAngle);
+
+        let scored = chunks.map(c => {
+            const diff = Math.abs(c.angle - lastQueryAngle);
+            return { ...c, score: Math.cos(diff), deg: (diff * 180 / Math.PI).toFixed(1) };
+        });
+        scored.sort((a, b) => b.score - a.score);
+
+        document.getElementById('math-display').innerHTML = `
+            V_q = <span class="highlight">${getVecCoords(lastQueryAngle)}</span><br>
+            Match: <span class="highlight">C${scored[0].id}</span> | Gap: <span class="highlight">${scored[0].deg}°</span>
+        `;
+
+        document.getElementById('ranking-container').innerHTML = scored.slice(0, 3).map((item, idx) => `
+            <div class="db-item ${idx === 0 ? 'rank-winner' : ''}">
+                <span class="score-badge" style="background: ${idx === 0 ? '#16a34a' : '#94a3b8'}">
+                    ${(item.score * 100).toFixed(1)}%
+                </span>
+                <strong>Rank #${idx+1}</strong>: C${item.id}<br>
+                <small>Similarity: ${item.score.toFixed(3)}</small>
+            </div>
+        `).join('');
+
+        renderDB();
+        document.getElementById(`db-${scored[0].id}`).classList.add('rank-winner');
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>

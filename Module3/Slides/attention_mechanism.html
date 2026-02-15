@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transformer Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .word-pill { transition: all 0.3s ease; }
+        .active-word { background-color: #4f46e5; color: white; transform: scale(1.1); box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4); }
+        .matrix-tag { font-size: 0.7rem; font-weight: 800; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; }
+        sub { vertical-align: sub; font-size: smaller; }
+        .role-table td { padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+        .prob-bar { transition: width 0.8s ease-out; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans p-4 md:p-8 text-slate-800">
+
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200">
+        <div class="bg-slate-900 p-8 text-center">
+            <div class="text-slate-400 text-xs uppercase tracking-[0.2em] mb-4">Input Sequence</div>
+            <div class="flex justify-center gap-4 items-center">
+                <span id="w0" class="word-pill px-4 py-2 rounded-lg bg-slate-800 text-slate-300 font-mono">The</span>
+                <span id="w1" class="word-pill px-4 py-2 rounded-lg bg-slate-800 text-slate-300 font-mono">cat</span>
+                <span id="w2" class="word-pill px-4 py-2 rounded-lg bg-slate-800 text-slate-300 font-mono font-bold">sat</span>
+                <span id="prediction-slot" class="text-indigo-400 animate-pulse text-2xl font-bold">... [? ]</span>
+            </div>
+        </div>
+
+        <div class="p-8">
+            <div class="mb-6">
+                <h2 id="step-title" class="text-2xl font-bold text-indigo-700"></h2>
+                <div id="step-desc" class="text-slate-600 mt-3 leading-relaxed"></div>
+            </div>
+
+            <div class="bg-slate-50 border-2 border-slate-100 rounded-xl p-6 min-h-[460px] flex flex-col items-center justify-center">
+                <div id="visual-content" class="w-full"></div>
+            </div>
+
+            <div class="mt-8 flex items-center justify-between border-t pt-6">
+                <button onclick="changeStep(-1)" class="px-5 py-2 text-slate-600 font-semibold hover:bg-slate-100 rounded-lg transition">Previous</button>
+                <div id="dot-indicators" class="flex gap-2"></div>
+                <button onclick="changeStep(1)" id="next-btn" class="px-8 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-lg transition">Next Step</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const steps = [
+            {
+                title: "1. Embedding Lookup (x)",
+                desc: "The word <b>'sat'</b> is converted into its mathematical vector <b>x</b>. This contains the word's dictionary definition but zero context.",
+                sentenceHighlight: [0,0,1],
+                predictionText: "... [? ]",
+                html: `<div class="flex flex-col items-center gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="p-4 bg-white border-2 border-indigo-500 rounded-lg font-bold italic text-indigo-600">x<sub>sat</sub></div>
+                            <div class="text-2xl text-slate-300">&rarr;</div>
+                            <div class="p-4 bg-white border-2 border-slate-300 rounded-lg font-mono text-slate-600">[1.2, -0.5]</div>
+                        </div>
+                    </div>`
+            },
+            {
+                title: "2. The Three Roles (q, k, v)",
+                desc: `Multiplication by learned weight matrices (W<sub>Q</sub>, W<sub>K</sub>, W<sub>V</sub>) creates three specialized versions of the word.
+                       <br><br>
+                       <b>What are these matrices?</b> They are the 'knowledge' of the model, created during training. They contain <b>learned weights</b> that know how to spot relationships. When <b>x</b> hits these matrices, it is filtered into three roles:`,
+                sentenceHighlight: [0,0,1],
+                predictionText: "... [? ]",
+                html: `<table class="w-full text-left role-table border-collapse mb-6">
+                        <thead>
+                            <tr class="text-[10px] text-slate-400 uppercase tracking-widest">
+                                <th class="pb-3">Role</th>
+                                <th class="pb-3">Analogy</th>
+                                <th class="pb-3">Significance</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <tr><td class="font-mono font-bold text-red-600">Query (q)</td><td class="italic">The Searcher</td><td>What I am <b>looking for</b> in others.</td></tr>
+                            <tr><td class="font-mono font-bold text-blue-600">Key (k)</td><td class="italic">The Label</td><td>How I <b>describe myself</b> to others.</td></tr>
+                            <tr><td class="font-mono font-bold text-green-600">Value (v)</td><td class="italic">The Content</td><td>The actual <b>meaning</b> I want to share.</td></tr>
+                        </tbody>
+                    </table>`
+            },
+            {
+                title: "3. Self-Attention Score",
+                desc: "The <b>Query</b> of 'sat' hits the <b>Key</b> of 'cat'. The model detects a high-strength match between the action (sitting) and the actor (the cat).",
+                sentenceHighlight: [1,1,1],
+                predictionText: "... [? ]",
+                html: `<div class="w-full space-y-3 max-w-sm mx-auto text-center">
+                        <div class="p-4 bg-indigo-600 text-white rounded-xl shadow-lg">
+                            <div class="text-xs uppercase opacity-70">Relevance Found</div>
+                            <div class="text-xl font-bold italic">sat &harr; cat (85%)</div>
+                        </div>
+                    </div>`
+            },
+            {
+                title: "4. The Context Output",
+                desc: "We take the <b>Value</b> of 'cat' and mix it into the vector for 'sat'. The word 'sat' now 'knows' it is a cat that is doing the sitting.",
+                sentenceHighlight: [0,0,1],
+                predictionText: "... [? ]",
+                html: `<div class="text-center">
+                        <div class="inline-block p-6 bg-slate-900 text-indigo-300 rounded-2xl font-mono text-xl border-b-4 border-indigo-500 shadow-xl">
+                            Contextual Vector
+                        </div>
+                    </div>`
+            },
+            {
+                title: "5. Feed-Forward Network",
+                desc: "The vector passes through a <b>Feed-Forward Layer</b>. This is where the model 'reasons'. It looks at the context ('cat' + 'sat') and concludes: 'If a cat is sitting, the next word is usually a location.'",
+                sentenceHighlight: [0,0,1],
+                predictionText: "... [? ]",
+                html: `<div class="flex flex-col items-center gap-4">
+                        <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
+                            <div class="p-4 bg-white border rounded-lg text-center shadow-sm">
+                                <div class="text-xs text-slate-400">INPUT</div>
+                                <div class="font-bold">Cat + Sat</div>
+                            </div>
+                            <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-lg text-center shadow-sm">
+                                <div class="text-xs text-indigo-400">REASONING</div>
+                                <div class="font-bold">Locational...</div>
+                            </div>
+                        </div>
+                    </div>`
+            },
+            {
+                title: "6. Output & Softmax",
+                desc: "The model projects its reasoning onto its entire vocabulary. <b>Softmax</b> ensures the word with the highest probability is chosen.",
+                sentenceHighlight: [0,0,1],
+                predictionText: "on",
+                html: `<div class="w-full max-w-md mx-auto space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1"><b>on</b> <span class="font-bold">92%</span></div>
+                            <div class="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                                <div class="bg-indigo-600 h-full prob-bar" style="width: 92%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">quietly <span class="font-bold">5%</span></div>
+                            <div class="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                                <div class="bg-indigo-400 h-full prob-bar" style="width: 5%"></div>
+                            </div>
+                        </div>
+                    </div>`
+            }
+        ];
+
+        function updateUI() {
+            const step = steps[currentStep];
+            document.getElementById('step-title').innerHTML = step.title;
+            document.getElementById('step-desc').innerHTML = step.desc;
+            document.getElementById('visual-content').innerHTML = step.html;
+            document.getElementById('prediction-slot').innerText = step.predictionText;
+
+            step.sentenceHighlight.forEach((active, i) => {
+                const el = document.getElementById(`w${i}`);
+                if(active) {
+                    el.classList.add('active-word');
+                    el.classList.remove('bg-slate-800', 'text-slate-300');
+                } else {
+                    el.classList.remove('active-word');
+                    el.classList.add('bg-slate-800', 'text-slate-300');
+                }
+            });
+
+            document.getElementById('dot-indicators').innerHTML = steps.map((_, i) =>
+                `<div class="w-2 h-2 rounded-full ${i === currentStep ? 'bg-indigo-600 w-6' : 'bg-slate-300'} transition-all duration-300"></div>`
+            ).join('');
+
+            document.getElementById('next-btn').innerText = currentStep === steps.length -1 ? "Start Over" : "Next Step";
+        }
+
+        function changeStep(dir) {
+            currentStep += dir;
+            if(currentStep >= steps.length) currentStep = 0;
+            if(currentStep < 0) currentStep = steps.length -1;
+            updateUI();
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced RAG Techniques</title>
+    <style>
+        :root { --primary: #2563eb; --success: #16a34a; --bg: #f8fafc; --text: #1e293b; --accent: #7c3aed; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
+
+        .container { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: 420px 1fr 380px; gap: 20px; }
+
+        .panel { background: white; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); height: fit-content; }
+        .panel-h { background: #f1f5f9; padding: 12px; font-weight: 800; font-size: 0.75rem; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; }
+        .content-area { padding: 15px; }
+
+        /* Technique Cards */
+        .tech-opt { padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
+        .tech-opt.active { border-color: var(--primary); background: #eff6ff; border-left: 5px solid var(--primary); }
+
+        .math-block { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--primary); background: #f1f5f9; padding: 4px; border-radius: 4px; display: block; margin: 5px 0; }
+        .plain-english { font-size: 0.75rem; color: #64748b; border-top: 1px dashed #cbd5e1; margin-top: 6px; padding-top: 6px; line-height: 1.3; }
+
+        /* Data Chunks */
+        .data-card { font-size: 0.8rem; padding: 12px; border: 1px solid #f1f5f9; background: #fff; border-radius: 8px; margin-bottom: 10px; }
+        .data-card.match { border-color: var(--success); background: #f0fdf4; border-width: 2px; }
+
+        .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; padding: 10px; border-left: 3px solid #cbd5e1; margin-bottom: 8px; background: #fafafa; }
+
+        /* Prompt Window */
+        .prompt-window { grid-column: 1 / -1; background: #0f172a; color: #f8fafc; padding: 25px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; border: 1px solid #334155; margin-top: 20px; white-space: pre-wrap; }
+        .prompt-tag { color: #fbbf24; font-weight: bold; }
+        .prompt-meta { color: #6366f1; font-weight: bold; font-size: 0.8rem; display: block; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+
+        input { width: 100%; padding: 14px; border: 2px solid #e2e8f0; border-radius: 10px; margin-bottom: 15px; font-size: 1rem; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel">
+        <div class="panel-h">Strategies & Equations</div>
+        <div class="content-area">
+            <div class="tech-opt active" onclick="setMode('naive', this)">
+                <strong>Naive RAG</strong>
+                <span class="math-block">Score = cos(θ)</span>
+                <div class="plain-english">Standard vector similarity search.</div>
+            </div>
+            <div class="tech-opt" onclick="setMode('hyde', this)">
+                <strong>HyDE</strong>
+                <span class="math-block">Vec(LLM(Q)) → DB</span>
+                <div class="plain-english">Uses a <b>hallucinated answer</b> to find better conceptual matches.</div>
+            </div>
+            <div class="tech-opt" onclick="setMode('rerank', this)">
+                <strong>Re-ranking</strong>
+                <span class="math-block">Prob(Rel | Q, D)</span>
+                <div class="plain-english">Detailed <b>cross-analysis</b> of the top candidates.</div>
+            </div>
+            <div class="tech-opt" onclick="setMode('mmr', this)">
+                <strong>MMR</strong>
+                <span class="math-block">Rel - Redundancy</span>
+                <div class="plain-english">Ensures results are both relevant and <b>diverse</b>.</div>
+            </div>
+            <div class="tech-opt" onclick="setMode('hybrid', this)">
+                <strong>Hybrid Retrieval</strong>
+                <span class="math-block">Score = Vector(Sim) + BM25(Sim)</span>
+                <div class="plain-english">Combines <b>Semantic Search</b> (meaning) with <b>Keyword Search</b> (exact characters/IDs).</div>
+            </div>
+            <div class="tech-opt" onclick="setMode('transform', this)">
+                <strong>Query Transformation</strong>
+                <span class="math-block">Q → [Q1, Q2, Q3]</span>
+                <div class="plain-english">Rewrites a vague query into <b>multi-angle variations</b> to increase retrieval coverage.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-h">Pipeline Log</div>
+        <div class="content-area">
+            <input type="text" id="qInput" placeholder="Try 'What is attention' ..." onkeypress="if(event.key==='Enter') execute()">
+            <div id="pipeLog"><p style="color:#94a3b8">Awaiting command...</p></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-h">Document Pool</div>
+        <div class="content-area" id="docPool"></div>
+    </div>
+
+    <div class="prompt-window" id="promptWindow">
+        <span class="prompt-meta">SYSTEM IDLE</span>
+    </div>
+</div>
+
+<script>
+    let mode = 'naive';
+    const rawDocs = [
+        { id: 1, text: "The Transformer architecture relies on Self-Attention to process sequence data efficiently.", keys: ["attention", "transformer"] },
+        { id: 2, text: "Self-Attention allows models to weigh the importance of different words in a sentence.", keys: ["attention", "sentence"] },
+        { id: 3, text: "Vector databases index embeddings to enable sub-second semantic search.", keys: ["vector", "database"] },
+        { id: 4, text: "Hallucinations happen when an LLM prioritizes fluency over grounded facts.", keys: ["hallucination"] },
+        { id: 5, text: "Model-ID: XJ-99. This specific Re-ranking model uses a Cross-Encoder for precision.", keys: ["xj-99", "rerank", "cross-encoder"] }
+    ];
+
+    function setMode(m, el) {
+        mode = m;
+        document.querySelectorAll('.tech-opt').forEach(opt => opt.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    function renderDocs(highlights = []) {
+        document.getElementById('docPool').innerHTML = rawDocs.map(doc => {
+            const activeClass = highlights.indexOf(doc.id) !== -1 ? 'match' : '';
+            return `<div class="data-card ${activeClass}"><b>[C${doc.id}]</b><br>${doc.text}</div>`;
+        }).join('');
+    }
+
+    function execute() {
+        const query = document.getElementById('qInput').value;
+        if(!query) return;
+        const pipe = document.getElementById('pipeLog');
+        pipe.innerHTML = "";
+
+        let retrievedIds = [];
+        let extraSection = "";
+
+        if (mode === 'hyde') {
+            const hypothesis = `Hypothetical: "Attention is a mathematical process used in Transformers..."`;
+            extraSection = `<span class="prompt-tag">HYPOTHESIS:</span>\n${hypothesis}\n\n`;
+            pipe.innerHTML += `<div class="log-entry"><b>HyDE:</b> Expanding intent via <b>hallucinated bridge</b>. <br><br> Vectors are <b>sensitive</b> to length and structure. <br><br>A short question like <b>"What is attention?"</b> is a tiny point in vector space. A 50-word technical explanation is a much larger, more complex point. <br><br> By generating that <b>"perfectly fine"</b> fake answer, the LLM creates a vector that has the same density and technical vocabulary as the real documents.</div>`;
+            retrievedIds = [1, 2];
+        }
+
+
+		else if (mode === 'rerank') {
+			pipe.innerHTML += `
+				<div class="log-entry">
+					<strong style="color:var(--primary); display:block; margin-bottom:8px;">RERANK: Scoring pairs via Cross-Encoder.</strong>
+					<p style="margin: 0 0 10px 0;">Re-ranking is the <b>"Deep Dive"</b> that happens immediately after. Here is exactly what that <b>"Scoring pairs"</b> step means:</p>
+					<ul style="margin: 0; padding-left: 15px; list-style-type: none;">
+						<li style="margin-bottom:8px;"><b>1. The "Pairs" Concept:</b><br>
+							<span style="color:#64748b">The system takes the top candidates and creates pairs: (Your Question + Chunk 1), (Your Question + Chunk 2), etc.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>2. The Cross-Encoder (The Smart Judge):</b><br>
+							<span style="color:#64748b">It looks at both simultaneously. Because it sees the question and answer side-by-side, it notices nuances vector math misses (e.g., "Cat on mat" vs "Mat on cat").</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>3. The Scoring Logic:</b><br>
+							<span style="color:#64748b">Assigning high probability to logic-perfect matches to ensure the most relevant doc is Rank #1.</span>
+						</li>
+					</ul>
+				</div>`;
+			retrievedIds = [5, 1];
+		}
+
+
+		else if (mode === 'mmr') {
+			pipe.innerHTML += `
+				<div class="log-entry">
+					<strong style="color:var(--primary); display:block; margin-bottom:8px;">MMR: Maximum Marginal Relevance (The Diversity Filter)</strong>
+					<p style="margin: 0 0 10px 0;">MMR prevents the LLM from getting repetitive information. It doesn't just look for what is <b>relevant</b>; it looks for what is <b>new</b>.</p>
+					<ul style="margin: 0; padding-left: 15px; list-style-type: none;">
+						<li style="margin-bottom:8px;"><b>1. The Redundancy Check:</b><br>
+							<span style="color:#64748b">Standard RAG would pick Chunks 1 and 2 because they both discuss "Attention." However, they are 90% identical in meaning.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>2. The Selection Formula ($Rel - Redundancy$):</b><br>
+							<span style="color:#64748b">MMR calculates a "penalty" for documents that are too similar to ones already picked. It sees Chunk 2 is redundant and skips it.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>3. The Diverse Swap:</b><br>
+							<span style="color:#64748b"><b>Action:</b> Swapped Chunk 2 for Chunk 3. Even though Chunk 3 is slightly "less relevant" to the word "Attention," it provides new info about "Vector Databases" that the LLM needs for a complete answer.</span>
+						</li>
+					</ul>
+				</div>`;
+			retrievedIds = [1, 3];
+		}
+
+		else if (mode === 'hybrid') {
+			pipe.innerHTML += `
+				<div class="log-entry">
+					<strong style="color:var(--primary); display:block; margin-bottom:8px;">HYBRID: Semantic + Keyword Search (The Best of Both Worlds)</strong>
+					<p style="margin: 0 0 10px 0;">Standard vector search often misses exact IDs or technical terms. Hybrid retrieval solves this by running two engines in parallel:</p>
+					<ul style="margin: 0; padding-left: 15px; list-style-type: none;">
+						<li style="margin-bottom:8px;"><b>1. The Semantic Engine (Vector Search):</b><br>
+							<span style="color:#64748b">Focuses on <b>meaning</b>. It knows that <b>"Transformer"</b> and <b>"Attention"</b> are related, even if the exact words aren't used.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>2. The Keyword Engine:</b><br>
+							<span style="color:#64748b">Focuses on <b>exact matches</b>. It finds specific names or IDs like <b>'XJ-99'</b> that the meaning-based search might ignore.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>3. The Master Blender:</b><br>
+							<span style="color:#64748b">
+								This step combines the results from both searches. <br><br>
+							    <b>The Step:</b> The system looks at the <b>ranks</b>, e.g., 1st place, 2nd place, etc. <br>
+								<b>The Consensus:</b> It gives <b>"points"</b> based on how high a document appears in each list. A document that is <b>#1 in Keyword</b> and <b>#1 in Semantic</b> wins because <b>both</b> engines agree it is important. <br>
+								<b>The Result:</b> This ensures you get <b>Chunk 5</b> (because it was an exact ID match) and <b>Chunk 1</b> (because it was the best conceptual match).
+							</span>
+						</li>
+					</ul>
+				</div>`;
+			retrievedIds = [5, 1];
+			extraSection = `<span class="prompt-tag">RETRIEVAL_STATS:</span>\nFound via Semantic: [C1]\nFound via Keyword: [C5]\n\n`;
+		}
+
+
+		else if (mode === 'transform') {
+			const variations = [
+				`1. "How does the self-attention mechanism function?"`,
+				`2. "Explain the core architecture of Transformers."`,
+				`3. "Technical specifications of weight scores in sequence data."`
+			];
+
+			pipe.innerHTML += `
+				<div class="log-entry">
+					<strong style="color:var(--primary); display:block; margin-bottom:8px;">TRANSFORM: Multi-Query Expansion (Approaching from All Angles)</strong>
+					<p style="margin: 0 0 10px 0;">User queries are often vague. This step "rewrites" your question into multiple high-quality variations to maximize retrieval success:</p>
+					<ul style="margin: 0; padding-left: 15px; list-style-type: none;">
+						<li style="margin-bottom:8px;"><b>1. Expansion & Rewriting:</b><br>
+							<span style="color:#64748b">An LLM takes the original query and generates 3-5 versions with different technical phrasing (shown in the variations list below).</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>2. Parallel Vector Search:</b><br>
+							<span style="color:#64748b">The system searches the database for <b>each</b> variation simultaneously. If one version is too far away in vector space, another will likely hit the target.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>3. The Unified Result:</b><br>
+							<span style="color:#64748b"><b>Action:</b> By searching for all versions, we successfully retrieved C1, C2, and C5, providing a much broader and more accurate context for the final answer.</span>
+						</li>
+					</ul>
+				</div>`;
+
+			extraSection = `<span class="prompt-tag">QUERY_VARIATIONS:</span>\n${variations.join("\n")}\n\n`;
+			retrievedIds = [1, 2, 5];
+		}
+
+
+
+		else {
+			pipe.innerHTML += `
+				<div class="log-entry">
+					<strong style="color:var(--primary); display:block; margin-bottom:8px;">NAIVE RAG: Direct Semantic Retrieval (The Baseline)</strong>
+					<p style="margin: 0 0 10px 0;">This is the standard approach. It relies entirely on the mathematical similarity between your question and the documents.</p>
+					<ul style="margin: 0; padding-left: 15px; list-style-type: none;">
+						<li style="margin-bottom:8px;"><b>1. Embedding the Query:</b><br>
+							<span style="color:#64748b">Your question is converted into a high-dimensional vector (a string of numbers) representing its meaning.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>2. Cosine Similarity Scan:</b><br>
+							<span style="color:#64748b">The system compares your query vector against every chunk in the database to find the "closest" matches in vector space.</span>
+						</li>
+						<li style="margin-bottom:8px;"><b>3. Top-K Retrieval:</b><br>
+							<span style="color:#64748b"><b>Action:</b> The system simply grabs the top results and dumps them into the prompt. No re-writing, no re-ranking, and no diversity checks are performed.</span>
+						</li>
+					</ul>
+				</div>`;
+
+			retrievedIds = rawDocs.filter(d => d.keys.some(k => query.toLowerCase().includes(k))).map(d => d.id);
+			if(retrievedIds.length === 0) retrievedIds = [1, 2];
+		}
+
+
+
+        renderDocs(retrievedIds);
+        const context = retrievedIds.map(id => `[SOURCE C${id}]: ${rawDocs.find(d => d.id === id).text}`).join("\n\n");
+
+        document.getElementById('promptWindow').innerHTML = `
+<span class="prompt-meta">MODE: ${mode.toUpperCase()}</span>
+<span class="prompt-tag">SYSTEM:</span> Answer ONLY using context.
+${extraSection}<span class="prompt-tag">CONTEXT:</span>
+${context}
+<span class="prompt-tag">USER:</span> ${query}
+<span class="prompt-tag">RESPONSE:</span>`;
+    }
+
+    window.onload = () => renderDocs();
+</script>
+</body>
+</html>

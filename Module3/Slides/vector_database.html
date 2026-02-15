@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RAG Storage and Vector Indexing</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; --vector: #7c3aed; --accent: #f59e0b; --code-bg: #1e293b; --embed: #0891b2; --danger: #dc2626; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .panel { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        h3 { margin-top: 0; font-size: 0.9rem; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; }
+
+        /* Input Area */
+        textarea { width: 100%; height: 80px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; font-family: inherit; margin-bottom: 10px; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+
+        /* Info Boxes */
+        .info-box { background: #fffbeb; border: 1px solid #fef3c7; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid var(--accent); }
+        .info-box h4 { margin: 0 0 5px 0; font-size: 0.8rem; color: #92400e; text-transform: uppercase; }
+        .info-box p { margin: 0; font-size: 0.8rem; line-height: 1.4; color: #b45309; }
+
+        .embed-box { background: #ecfeff; border: 1px solid #cffafe; border-left: 4px solid var(--embed); padding: 15px; border-radius: 8px; margin-top: 15px; }
+        .embed-box h4 { margin: 0 0 5px 0; font-size: 0.8rem; color: #0e7490; text-transform: uppercase; }
+        .embed-box p { margin: 0; font-size: 0.8rem; line-height: 1.4; color: #0891b2; }
+
+        .mgmt-box { background: #fef2f2; border: 1px solid #fee2e2; border-left: 4px solid var(--danger); padding: 15px; border-radius: 8px; margin-top: 15px; }
+        .mgmt-box h4 { margin: 0 0 5px 0; font-size: 0.8rem; color: #991b1b; text-transform: uppercase; }
+        .mgmt-box li { font-size: 0.8rem; line-height: 1.4; color: #b91c1c; margin-bottom: 5px; }
+
+        .code-box { background: var(--code-bg); color: #e2e8f0; padding: 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; margin-top: 10px; overflow-x: auto; line-height: 1.4; }
+        .code-keyword { color: #f472b6; }
+        .code-func { color: #60a5fa; }
+        .code-comment { color: #94a3b8; }
+
+        /* Vector Table */
+        .db-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 15px; }
+        .db-table th { text-align: left; background: #f1f5f9; padding: 10px; border-bottom: 2px solid #e2e8f0; }
+        .db-table td { padding: 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+
+        .vector-tag { font-family: 'JetBrains Mono', monospace; color: var(--vector); background: #f5f3ff; padding: 2px 6px; border-radius: 4px; display: inline-block; word-break: break-all; }
+        .status-msg { font-size: 0.75rem; color: #16a34a; font-weight: bold; margin-top: 10px; height: 1.2em; }
+
+        @keyframes highlight { from { background: #fef9c3; } to { background: transparent; } }
+        .new-row { animation: highlight 2s ease-out; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel">
+        <h3>1. Create Semantic Chunk</h3>
+        <textarea id="chunkInput">Self-attention allows models to weigh the importance of different words in a sentence.</textarea>
+        <button onclick="saveToDB()">Embed, Normalize & Save</button>
+        <div id="status" class="status-msg"></div>
+
+        <div class="embed-box">
+            <h4>How are Embeddings Determined?</h4>
+            <p>We can use a <b>Gemini embedding model</b> which already contains normalized embedded vectors.</p>
+        </div>
+
+        <div class="info-box">
+            <h4>The Normalization Step</h4>
+            <p>Vectors are scaled to a "unit length" of 1 so that search results are based purely on <b>topic similarity</b> rather than text length.</p>
+        </div>
+
+        <div class="mgmt-box">
+            <h4>Vector DB Operations</h4>
+            <ul style="margin: 0; padding-left: 18px;">
+                <li><code>update()</code> or <code>delete()</code> records using their unique IDs.</li>
+                <li>Store and filter by extra data; e.g., source or date, during retrieval.</li>
+                <li>peek()</code> at data, <code>count()</code> items, or delete entire collections.</li>
+            </ul>
+        </div>
+
+        <div class="info-box" style="background: #f0f9ff; border-color: #bae6fd; border-left-color: #0ea5e9;">
+            <h4 style="color: #0369a1;">LangChain Implementation</h4>
+            <p style="color: #075985;">In a real app, you would use these functions to move data in and out:</p>
+            <div class="code-box">
+					<span class="code-comment"># Create the vector store:</span>
+					<br>vector_store = <span class="code-func">Chroma</span>(embedding_function=embeddings)
+
+					<span class="code-comment"><br><br># To Save/Index Chunks:</span>
+					<br>vector_store.<span class="code-func">add_documents</span>(docs)
+
+					<span class="code-comment"><br><br># To Retrieve Chunks:</span>
+					<br>results = vector_store.<span class="code-func">similarity_search</span>(
+						<span class="code-keyword">"How do language models work?"</span>,
+						k=2
+					)</div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>2. Vector Database (Normalized Storage)</h3>
+        <table class="db-table">
+            <thead>
+                <tr>
+                    <th width="40%">Metadata (Text)</th>
+                    <th width="60%">Normalized Vector</th>
+                </tr>
+            </thead>
+            <tbody id="dbBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const db = [];
+
+    function generateNormalizedVector(dim = 6) {
+        let v = Array.from({length: dim}, () => Math.random() * 2 - 1);
+        let magnitude = Math.sqrt(v.reduce((sum, val) => sum + val * val, 0));
+        return v.map(val => (val / magnitude).toFixed(4));
+    }
+
+    function saveToDB() {
+        const text = document.getElementById('chunkInput').value;
+        if (!text.trim()) return;
+
+        const vector = generateNormalizedVector();
+        const entry = { text, vector };
+
+        db.unshift(entry);
+        updateUI();
+
+        document.getElementById('status').innerText = "✓ vector_store.add_documents() success";
+        setTimeout(() => document.getElementById('status').innerText = "", 3000);
+        document.getElementById('chunkInput').value = "";
+    }
+
+    function updateUI() {
+        const tbody = document.getElementById('dbBody');
+        tbody.innerHTML = db.map((item, index) => `
+            <tr class="${index === 0 ? 'new-row' : ''}">
+                <td>${item.text}</td>
+                <td><span class="vector-tag">[${item.vector.join(', ')}...]</span></td>
+            </tr>
+        `).join('');
+    }
+
+    window.onload = () => {
+        db.push({
+            text: "The Transformer architecture relies on Self-Attention.",
+            vector: generateNormalizedVector()
+        });
+        updateUI();
+    };
+</script>
+</body>
+</html>
