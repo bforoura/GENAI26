@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IVF: Inverted File Index - Visual Lab</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; --vector: #7c3aed; --accent: #f59e0b; --ann: #10b981; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .panel { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow-y: auto; max-height: 92vh; }
+        h3 { margin-top: 0; font-size: 0.85rem; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 15px; }
+
+        .viz-box { width: 100%; height: 350px; background: #0f172a; border-radius: 8px; position: relative; overflow: hidden; border: 1px solid #334155; margin-bottom: 20px; }
+        #viz-inner { width: 100%; height: 100%; position: absolute; top: 0; left: 0; transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center; }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; position: absolute; transform: translate(-50%, -50%); transition: 0.3s; border: 1px solid white; }
+        .centroid { width: 26px; height: 26px; border: 3px solid #fff; z-index: 10; transform: translate(-50%, -50%) rotate(45deg); cursor: pointer; }
+
+        .keyword-tooltip { position: absolute; background: white; color: #1e293b; padding: 8px 12px; border-radius: 6px; font-size: 0.75rem; width: 160px; pointer-events: none; opacity: 0; transition: 0.2s; z-index: 100; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); border: 1px solid #e2e8f0; transform: translate(-50%, -130%); }
+        .centroid:hover + .keyword-tooltip { opacity: 1; }
+
+        .query-dot { width: 22px; height: 22px; background: #ef4444 !important; z-index: 25; border: 3px solid white; box-shadow: 0 0 20px rgba(239,68,68,0.8); display: none; }
+        .cluster-label { position: absolute; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: rgba(255,255,255,0.9); padding: 2px 6px; border-radius: 4px; pointer-events: none; z-index: 12; border: 1px solid #e2e8f0; transform: translate(-50%, 24px); }
+
+        .search-area { margin-bottom: 20px; display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-family: inherit; font-size: 1rem; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .reset-btn { background: #64748b; }
+
+        #scanning-tag { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #ef4444; color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; display: none; z-index: 50; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+
+        .phase-step { padding: 8px; border-radius: 4px; background: #f1f5f9; color: #64748b; font-size: 0.7rem; font-weight: bold; flex: 1; text-align: center; border: 1px solid #e2e8f0; }
+        .phase-active { background: var(--ann); color: white; border-color: var(--ann); }
+
+        .notation-item { margin-bottom: 25px; font-size: 0.85rem; line-height: 1.6; border-left: 4px solid #f1f5f9; padding-left: 15px; }
+        .notation-title { font-weight: 800; color: #1e293b; display: block; margin-bottom: 8px; font-size: 0.75rem; text-transform: uppercase; }
+
+        .math-block { background: #fffbeb; border: 1px solid #fef3c7; padding: 12px; border-radius: 8px; margin: 10px 0; color: #92400e; font-family: 'Courier New', monospace; font-size: 0.95rem; text-align: center; }
+
+        .code-block { background: #0f172a; padding: 15px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.6; }
+        .code-line { transition: 0.3s; display: block; opacity: 0.45; color: #cbd5e1; }
+        .code-active { color: #f8fafc; opacity: 1; border-left: 3px solid #60a5fa; padding-left: 10px; background: rgba(255,255,255,0.07); }
+        .code-comment { color: #94a3b8; font-style: italic; }
+        .code-keyword { color: #38bdf8; font-weight: bold; }
+        #dynamic-query { color: #f59e0b; }
+
+        .status-tracker { margin-top: 15px; background: #1e293b; color: white; padding: 12px; border-radius: 8px; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; }
+        .complexity-val { color: var(--accent); font-weight: bold; }
+
+        .active-search { outline: 3px solid #ef4444; z-index: 20; transform: scale(3) translate(-50%, -50%); transition: 0.2s; }
+        .match-highlight { box-shadow: 0 0 30px #fbbf24; border: 3px solid #fbbf24 !important; z-index: 30; transform: scale(4) translate(-50%, -50%) !important; }
+        .fade { opacity: 0.05; filter: blur(1px); }
+
+        .full-name { color: var(--primary); font-weight: bold; font-size: 1.1rem; display: block; margin-bottom: 5px; }
+        .highlight-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 10px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85rem; }
+        .rag-tip { background: #fdf2f8; border: 1px dotted #f472b6; padding: 8px; border-radius: 6px; margin-top: 10px; font-size: 0.75rem; color: #be185d; }
+        .analogy-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 0.75rem; line-height: 1.4; }
+        .dense-note { color: #475569; font-size: 0.75rem; font-style: italic; margin-top: 8px; display: block; }
+
+        .var-legend { font-size: 0.75rem; color: #475569; background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin-top: 5px; }
+        .var-legend b { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel">
+        <span class="full-name">Inverted File Index (IVF)</span>
+        <h3> </h3>
+        <div class="search-area">
+            <input type="text" id="queryInput" placeholder="Try 'hack', 'ai', 'medicine'..." oninput="updateLiveCode(this.value)">
+            <button onclick="performIVF()">Run Search</button>
+            <button class="reset-btn" onclick="resetSimulation()">Reset</button>
+        </div>
+
+        <div class="viz-box">
+            <div id="viz-inner">
+                <div id="queryDot" class="dot query-dot"></div>
+            </div>
+            <div id="scanning-tag">Scanning: <span id="current-concept">...</span></div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+            <div id="step1" class="phase-step">1. ROUTE</div>
+            <div id="step2" class="phase-step">2. ZOOM</div>
+            <div id="step3" class="phase-step">3. SCAN</div>
+        </div>
+
+        <div class="code-block" id="python-code">
+            <span class="code-line" id="code-p1"><span class="code-comment"># Initializing the Store: 'batch' is mandatory here</span></span>
+            <span class="code-line" id="code-p1b"><span class="code-comment"># It defines the vectors & creates the searchable clusters</span></span>
+            <span class="code-line" id="code-p1c">db = FAISS.<span class="code-keyword">from_documents</span>(batch, embeddings)</span>
+            <br>
+            <span class="code-line" id="code-p2"><span class="code-comment"># The string below updates as you type in the box:</span></span>
+            <span class="code-line" id="code-p2b">query_str = <span class="code-keyword">"</span><span id="dynamic-query">What is the capital?</span><span class="code-keyword">"</span></span>
+            <br>
+            <span class="code-line" id="code-p3"><span class="code-comment"># k=1: Returns top 1 result from the indexed 'batch'</span></span>
+            <span class="code-line" id="code-p3c">docs = db.<span class="code-keyword">similarity_search</span>(query_str, k=1)</span>
+        </div>
+
+        <div class="status-tracker">
+            <span>Calculations: <span id="comp-count" class="complexity-val">0</span> / 180</span>
+            <span id="status-text">Ready</span>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="rag-tip">
+            <strong>FAISS: </strong>
+            <b>F</b>acebook <b>A</b>I <b>S</b>imilarity <b>S</b>earch. A high-performance library designed for dense vector retrieval across massive datasets. It is optimized for <b>Dense Vectors</b>, i.e., every single dimension in the vector has a value.
+        </div>
+
+        <h3></h3>
+
+        <div class="notation-box">
+            <div class="notation-item" id="not-p1">
+                <span class="notation-title">Step 1: The Quantizer</span>
+                <div class="math-block">Minimize: Dist = SquareRoot( Sum( (q - C)^2 ) )</div>
+                <div class="var-legend">
+                    <b>q:</b> Query Vector <br>
+                    <b>C:</b> Centroid Vector
+                </div>
+            </div>
+
+            <div class="notation-item" id="not-p2">
+                <span class="notation-title">Step 2: Inverted File (IVF) Logic</span>
+                <div class="math-block">Target List = { x | closest_centroid(x) == C_target }</div>
+                <div class="var-legend">
+                    Only scan vectors <b>x</b> where their assigned cluster is our <b>target</b>.
+                </div>
+            </div>
+
+            <div class="notation-item" id="not-p3">
+                <span class="notation-title">Step 3: Fine Scan (nprobe)</span>
+                <div class="math-block">Max: Similarity = (q · x) / (|q| * |x|)</div>
+                <div class="rag-tip">
+                    While <b>L2 (Euclidean)</b> is used for fast physical routing into clusters, <b>Cosine Similarity</b> is preferred for final retrieval to match semantic <b>"intent"</b> regardless of text length.
+                </div>
+                <div class="rag-tip">
+
+                    • <b>L2 (Coarse):</b> Finding the right section, e.g. <b>"History"</b>. Spatial math helps you find which area you're physically closest to.<br><br>
+                    • <b>Cosine (Fine):</b> Comparing books on that shelf. You don't care if it's a 10-page pamphlet or 500-page textbook; you only care if the <b>"angle"</b> of the topic matches.
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const vizInner = document.getElementById('viz-inner');
+    const dynamicQueryText = document.getElementById('dynamic-query');
+    const points = [];
+    const centroids = [];
+    const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+    const LABELS = ['Architecture', 'Medical', 'Cybersecurity', 'History', 'Computer Science'];
+
+    const routingMap = [
+        { id: 2, keywords: ['malware', 'attack', 'hack', 'cybersecurity', 'security'], concepts: ['SQLi', 'DDoS', 'Phishing', 'Nmap', 'Rootkit'] },
+        { id: 1, keywords: ['doctor', 'surgery', 'medicine', 'health'], concepts: ['Oncology', 'MRI Scan', 'Cardiology', 'Vaccine'] },
+        { id: 3, keywords: ['ancient', 'roman', 'empire', 'history'], concepts: ['Dynasty', 'WWII', 'Silk Road', 'Crusades'] },
+        { id: 4, keywords: ['algorithm', 'python', 'neural', 'ai', 'code'], concepts: ['QuickSort', 'CNN', 'PyTorch', 'Backprop', 'Transformer'] },
+        { id: 0, keywords: ['design', 'arch', 'architecture', 'build', 'structure'], concepts: ['Bauhaus', 'AutoCAD', 'Urban Plan', 'Atrium'] }
+    ];
+
+    function updateLiveCode(val) {
+        if(val === '') {
+            dynamicQueryText.innerText = "What is the capital?";
+            resetSimulation();
+        } else {
+            dynamicQueryText.innerText = val;
+        }
+    }
+
+    function init() {
+        const layout = [{x: 25, y: 25}, {x: 75, y: 25}, {x: 50, y: 50}, {x: 25, y: 75}, {x: 75, y: 75}];
+        for(let i=0; i<5; i++) {
+            const route = routingMap.find(r => r.id === i);
+            const c = { x: layout[i].x, y: layout[i].y, color: COLORS[i], label: LABELS[i], keywords: route.keywords, concepts: route.concepts };
+            centroids.push(c);
+
+            const el = document.createElement('div');
+            el.className = 'dot centroid'; el.style.left = c.x + '%'; el.style.top = c.y + '%'; el.style.background = c.color;
+            vizInner.appendChild(el);
+
+            const tip = document.createElement('div');
+            tip.className = 'keyword-tooltip';
+            tip.innerHTML = `<strong>${c.label}:</strong><br>${c.keywords.join(', ')}`;
+            tip.style.left = c.x + '%'; tip.style.top = c.y + '%';
+            vizInner.appendChild(tip);
+
+            const lbl = document.createElement('div');
+            lbl.className = 'cluster-label'; lbl.innerText = c.label; lbl.style.left = c.x + '%'; lbl.style.top = c.y + '%'; lbl.style.color = c.color;
+            vizInner.appendChild(lbl);
+        }
+        for(let i=0; i<180; i++) {
+            const clusterIdx = Math.floor(Math.random() * 5);
+            const c = centroids[clusterIdx];
+            const p = { id: i, cluster: clusterIdx, concept: c.concepts[Math.floor(Math.random() * c.concepts.length)], x: c.x + (Math.random() - 0.5) * 16, y: c.y + (Math.random() - 0.5) * 16 };
+            points.push(p);
+            const el = document.createElement('div'); el.className = 'dot'; el.id = `dot-${i}`; el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.background = COLORS[clusterIdx] + '66';
+            vizInner.appendChild(el);
+        }
+    }
+
+    function resetSimulation() {
+        document.getElementById('queryInput').value = '';
+        dynamicQueryText.innerText = "What is the capital?";
+        vizInner.style.transform = "scale(1) translate(0, 0)";
+        document.getElementById('queryDot').style.display = 'none';
+        document.getElementById('scanning-tag').style.display = 'none';
+        document.getElementById('comp-count').innerText = '0';
+        document.getElementById('status-text').innerText = "Ready";
+
+        document.querySelectorAll('.dot').forEach(el => {
+            el.classList.remove('fade', 'active-search', 'match-highlight');
+            if(el.id.startsWith('dot-')) {
+                const id = parseInt(el.id.replace('dot-', ''));
+                el.style.background = COLORS[points[id].cluster] + '66';
+            }
+        });
+        document.querySelectorAll('.code-line, .phase-step').forEach(el => el.classList.remove('code-active', 'phase-active'));
+    }
+
+    async function performIVF() {
+        const queryText = document.getElementById('queryInput').value.toLowerCase();
+        if(!queryText) return;
+
+        document.querySelectorAll('.dot, .code-line, .phase-step').forEach(el => el.classList.remove('fade', 'active-search', 'match-highlight', 'code-active', 'phase-active'));
+
+        document.getElementById('step1').classList.add('phase-active');
+        document.getElementById('code-p1').classList.add('code-active');
+        document.getElementById('code-p1b').classList.add('code-active');
+        document.getElementById('code-p1c').classList.add('code-active');
+        document.getElementById('status-text').innerText = "Routing...";
+
+        let targetIdx = 0;
+        for(let route of routingMap) { if(route.keywords.some(k => queryText.includes(k))) { targetIdx = route.id; break; } }
+        const c = centroids[targetIdx];
+        const qDot = document.getElementById('queryDot'); qDot.style.display = 'block'; qDot.style.left = c.x + '%'; qDot.style.top = c.y + '%';
+
+        for(let i=1; i<=5; i++) { document.getElementById('comp-count').innerText = i; await new Promise(r => setTimeout(r, 100)); }
+        await new Promise(r => setTimeout(r, 600));
+
+        document.getElementById('step2').classList.add('phase-active');
+        document.getElementById('code-p2').classList.add('code-active');
+        document.getElementById('code-p2b').classList.add('code-active');
+        document.getElementById('status-text').innerText = "Isolating...";
+
+        const scale = 3.5; const tx = (50 - c.x) * scale; const ty = (50 - c.y) * scale;
+        vizInner.style.transform = `translate(${tx}%, ${ty}%) scale(${scale})`;
+        points.forEach(p => { if(p.cluster !== targetIdx) document.getElementById(`dot-${p.id}`).classList.add('fade'); });
+        await new Promise(r => setTimeout(r, 1200));
+
+        document.getElementById('step3').classList.add('phase-active');
+        document.getElementById('code-p3').classList.add('code-active');
+        document.getElementById('code-p3c').classList.add('code-active');
+        document.getElementById('scanning-tag').style.display = 'block';
+
+        const localPoints = points.filter(p => p.cluster === targetIdx).sort(() => Math.random() - 0.5).slice(0, 15);
+        let calcBase = 5;
+        let winner = null;
+        for(let p of localPoints) {
+            const el = document.getElementById(`dot-${p.id}`);
+            document.getElementById('current-concept').innerText = p.concept;
+            el.classList.add('active-search');
+            calcBase++;
+            document.getElementById('comp-count').innerText = calcBase;
+            await new Promise(r => setTimeout(r, 300));
+            el.classList.remove('active-search');
+            winner = el;
+        }
+        if(winner) {
+            winner.classList.add('match-highlight'); winner.style.background = '#ef4444';
+            document.getElementById('status-text').innerText = "Match Found";
+        }
+    }
+    init();
+</script>
+</body>
+</html>

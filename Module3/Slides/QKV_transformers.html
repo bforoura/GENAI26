@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QKV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #ffffff; color: #1e293b; }
+        .card-white { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; transition: all 0.3s ease; }
+        .current-token { color: #2563eb; font-weight: 800; text-decoration: underline; }
+        .math-block { font-family: 'Courier New', Courier, monospace; background: #f1f5f9; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #94a3b8; }
+        .formula-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; }
+        .matrix-content { font-size: 0.75rem; color: #64748b; line-height: 1.4; }
+        [x-cloak] { display: none !important; }
+        .kv-pill { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+        .attn-active { background-color: #dbeafe !important; border-color: #3b82f6 !important; cursor: pointer; }
+        .attn-target { color: #2563eb !important; font-weight: 800 !important; }
+        .pulse-new { animation: pulse-blue 2s infinite; }
+        @keyframes pulse-blue { 0% { color: #2563eb; } 50% { color: #60a5fa; } 100% { color: #2563eb; } }
+        .math-text { font-family: 'Times New Roman', serif; font-style: italic; }
+        .fraction { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; padding: 0 4px; }
+        .numerator { border-bottom: 1px solid #1e293b; padding-bottom: 2px; }
+        .denominator { padding-top: 2px; }
+    </style>
+</head>
+<body class="min-h-screen font-sans" x-data="{
+    activeTab: 'journey',
+    hoveredWord: null,
+    history: ['The', 'left', 'bank', 'was', 'closed', 'because'],
+    activeQuery: 'the',
+    isFinished: false,
+    softmaxDetails: {
+        'the': { raw: '14.2', weight: '88.5%', op: 'bank &middot; because' },
+        'river': { raw: '18.7', weight: '94.1%', op: 'left &middot; bank' },
+        'flooded': { raw: '16.4', weight: '91.2%', op: 'river &middot; bank' },
+        'everywhere': { raw: '12.9', weight: '82.4%', op: 'flooded &middot; river' },
+        '.': { raw: '19.1', weight: '96.5%', op: 'everywhere &middot; river' }
+    },
+    attentionMap: {
+        'The': ['The'], 'left': ['The', 'left'], 'bank': ['The', 'left', 'bank'],
+        'was': ['bank', 'was'], 'closed': ['was', 'closed'], 'because': ['closed', 'because'],
+        'the': ['bank', 'because'], 'river': ['left', 'bank', 'the'],
+        'flooded': ['river', 'bank', 'left'], 'everywhere': ['flooded', 'river', 'bank'], '.': ['everywhere', 'river', 'bank']
+    },
+    predictions: { 'the': 'river', 'river': 'flooded', 'flooded': 'everywhere', 'everywhere': '.', '.': 'DONE' },
+    continueGeneration() {
+        if (this.activeQuery === '.') {
+            this.history.push(this.activeQuery);
+            this.isFinished = true;
+            this.activeTab = 'journey';
+            return;
+        }
+        this.history.push(this.activeQuery);
+        this.activeQuery = this.predictions[this.activeQuery];
+        this.activeTab = 'journey';
+    }
+}">
+
+    <header class="py-10 px-4 text-center border-b border-slate-100 bg-slate-50">
+        <h1 class="text-4xl font-black tracking-tight text-slate-900 mb-2">The Transformer Engine</h1>
+        <p class="text-slate-500 italic">
+            <template x-for="word in history" :key="Math.random()">
+                <span x-text="word + ' '"></span>
+            </template>
+            <span x-show="!isFinished" class="current-token pulse-new">...</span>
+        </p>
+    </header>
+
+    <nav class="flex justify-center space-x-2 py-6 sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100">
+        <button @click="activeTab = 'journey'" :class="activeTab === 'journey' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'" class="px-6 py-2 rounded-lg transition-all font-bold">1. Intuition & Training</button>
+        <button x-show="!isFinished" @click="activeTab = 'dual'" :class="activeTab === 'dual' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'" class="px-6 py-2 rounded-lg transition-all font-bold">2. Softmax Logic</button>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6">
+        <div x-show="activeTab === 'journey'" x-transition x-cloak class="space-y-8">
+            <div class="grid md:grid-cols-2 gap-8 items-center">
+                <div class="card-white p-8 border-l-8 border-blue-600 shadow-md h-full">
+                    <div class="flex items-center mb-6">
+                        <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold mr-4 shadow-lg">Q</div>
+                        <div><h3 class="font-bold text-slate-900" x-text="isFinished ? 'Generation Complete' : (hoveredWord ? 'Inspecting: ' + hoveredWord : 'Active Search: Predicting Next Token')"></h3></div>
+                    </div>
+                    <div x-show="!hoveredWord && !isFinished">
+                        <p class="text-sm text-slate-600 leading-relaxed">The <b>Query</b> scans the cache. By attending to <b>"left"</b> and <b>"bank"</b>, it confirms the next token should be geographical.</p>
+                    </div>
+                    <div x-show="isFinished">
+                        <p class="text-sm text-emerald-600 font-bold">Terminal token reached. Sentence complete.</p>
+                        <button @click="window.location.reload()" class="mt-4 text-xs text-blue-600 underline">Restart</button>
+                    </div>
+                    <div x-show="hoveredWord" x-transition>
+                        <p class="text-xs font-bold text-blue-600 uppercase mb-3">Attending to:</p>
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="target in (attentionMap[hoveredWord] || [])" :key="target">
+                                <span class="px-3 py-1 bg-white border border-blue-200 rounded-full text-blue-700 text-xs font-bold shadow-sm" x-text="target"></span>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-white p-6 shadow-sm border border-slate-200">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-4 tracking-tighter">History (KV Cache)</h4>
+                    <div class="space-y-2 max-h-64 overflow-y-auto pr-2">
+                        <template x-for="(word, index) in history" :key="index">
+                            <div @mouseenter="hoveredWord = word" @mouseleave="hoveredWord = null"
+                                class="p-2 rounded-lg flex items-center justify-between border transition-all"
+                                :class="{'attn-active': hoveredWord === word, 'bg-yellow-50 border-yellow-200': (word === 'bank' || word === 'left') && !hoveredWord, 'bg-slate-50 border-transparent': hoveredWord !== word && word !== 'bank' && word !== 'left'}">
+                                <span class="text-sm font-bold w-12" :class="hoveredWord && attentionMap[hoveredWord] && attentionMap[hoveredWord].includes(word) ? 'attn-target' : ''" x-text="word"></span>
+                                <div class="flex space-x-2"><span class="kv-pill bg-yellow-100 text-yellow-700">K</span><span class="kv-pill bg-emerald-100 text-emerald-700">V</span></div>
+                                <div class="w-24 h-1 bg-slate-200 rounded-full relative ml-4">
+                                    <div class="absolute h-full bg-blue-500 transition-all duration-300" :style="(word === 'bank' || word === 'left') ? 'width: 90%' : 'width: 15%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="formula-box p-8 mt-10 border-2 border-slate-100">
+                <div class="flex items-center justify-center space-x-2 mb-8"><i class="fas fa-brain text-slate-400"></i><h4 class="font-bold text-slate-500 uppercase text-xs tracking-[0.2em]">The Genesis of Wq, Wk, and Wv</h4></div>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="space-y-4">
+                        <div class="text-lg font-serif italic text-blue-600 border-b pb-1">Wq: The Search Strategy</div>
+                        <div class="matrix-content"><b>Significance:</b> Represents the model's learned ability to ask questions.</div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="text-lg font-serif italic text-yellow-600 border-b pb-1">Wk: The Indexing Profile</div>
+                        <div class="matrix-content"><b>Significance:</b> Represents the word's "Public Identity".</div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="text-lg font-serif italic text-emerald-600 border-b pb-1">Wv: The Factual Payload</div>
+                        <div class="matrix-content"><b>Significance:</b> Represents the "Knowledge Store".</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="formula-box p-8 border-t-4 border-blue-600 bg-slate-50">
+                <h4 class="font-bold text-slate-800 uppercase text-xs tracking-widest mb-6 text-center underline">Scaling Dot-Product Attention</h4>
+                <div class="flex flex-col items-center space-y-6">
+                    <div class="bg-white p-6 rounded-lg border shadow-sm text-2xl math-text">
+                        Attention(Q, K, V) = softmax<span class="text-3xl" style="vertical-align: -3px;">(</span><span class="fraction">
+                            <span class="numerator">Q K<sup>T</sup></span>
+                            <span class="denominator">&radic;d<sub>k</sub></span>
+                        </span><span class="text-3xl" style="vertical-align: -3px;">)</span> V
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="activeTab === 'dual'" x-transition x-cloak class="space-y-8 text-center">
+            <div class="card-white p-8">
+                <h2 class="text-2xl font-extrabold text-slate-900 mb-6">Probability Distribution Across the Stack</h2>
+
+                <div class="grid md:grid-cols-2 gap-10 text-left mb-10">
+                    <div class="space-y-4">
+                        <h4 class="font-bold text-blue-600 border-b pb-2">Step 2. Internal Attention Weights</h4>
+                        <div class="math-block">
+                            <div class="flex justify-between text-sm">
+                                <span>Relationship: (<strong x-html="softmaxDetails[activeQuery].op"></strong>)</span>
+                                <span class="font-bold" x-text="softmaxDetails[activeQuery].raw"></span>
+                            </div>
+                            <div class="flex justify-between text-sm text-blue-600 font-bold">
+                                <span>Softmax Weight</span>
+                                <span x-text="softmaxDetails[activeQuery].weight"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <h4 class="font-bold text-slate-700 border-b pb-2">Step 3. Final Vocabulary Probability</h4>
+                        <div class="math-block">
+                            <div class="flex justify-between text-sm">
+                                <span>Next Word: <strong x-text="'\'' + activeQuery + '\''"></strong></span>
+                                <span class="font-bold">22.4</span>
+                            </div>
+                            <div class="flex justify-between text-sm text-emerald-600 font-bold">
+                                <span>Output Probability</span>
+                                <span>0.982</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="p-6 bg-slate-50 border border-slate-200 rounded-xl">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">The Normalization Engine</h4>
+                        <div class="text-xl math-text bg-white inline-block p-4 rounded border shadow-sm mb-4">
+                            Softmax(z<sub>i</sub>) = <span class="fraction">
+                                <span class="numerator">e<sup>z<sub>i</sub></sup></span>
+                                <span class="denominator">&sum;<sub>j</sub> e<sup>z<sub>j</sub></sup></span>
+                            </span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 leading-relaxed italic">
+                            Softmax is applied to <b>each attention head</b> and the <b>final layer</b>.
+                        </p>
+                    </div>
+
+                    <div class="p-6 bg-indigo-50 border border-indigo-100 rounded-xl">
+                        <h4 class="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-4">The Deep Stack: L Layers</h4>
+                        <div class="text-xl math-text bg-white inline-block p-4 rounded border shadow-sm mb-4">
+                            h<sup>(l)</sup> = Layer(h<sup>(l-1)</sup>)
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-relaxed text-left">
+                            Each layer <span class="math-text">l</span> refines the representation. The final output is a result of transformations through all <span class="math-text">L</span> layers.
+                        </p>
+                    </div>
+                </div>
+
+                <button @click="continueGeneration()" class="mt-8 px-10 py-4 bg-emerald-600 text-white rounded-full font-black text-xl hover:bg-emerald-700 transition-all shadow-xl hover:scale-105">
+                    Project & Append "<span x-text="activeQuery"></span>" <i class="fas fa-plus-circle ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
