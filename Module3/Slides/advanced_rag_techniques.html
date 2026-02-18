@@ -38,7 +38,7 @@
 
 <div class="container">
     <div class="panel">
-        <div class="panel-h">Strategies & Equations</div>
+        <div class="panel-h">Advanced RAG Strategies</div>
         <div class="content-area">
             <div class="tech-opt active" onclick="setMode('naive', this)">
                 <strong>Naive RAG</strong>
@@ -146,6 +146,18 @@
 						<li style="margin-bottom:8px;"><b>3. The Scoring Logic:</b><br>
 							<span style="color:#64748b">Assigning high probability to logic-perfect matches to ensure the most relevant doc is Rank #1.</span>
 						</li>
+                        <li style="margin-top:15px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                            <b>4. The Re-ranking Formula:</b><br>
+                            <span style="color:#64748b">The Cross-Encoder calculates a relevance score for each pair:</span>
+                            <div class="math-block" style="font-size: 0.75rem; padding: 10px; margin: 10px 0; color: #7c3aed; background: #f5f3ff;">
+                                Score = Sigmoid( MLP( Encoder(Query + Document) ) )
+                            </div>
+                            <ul style="margin: 0; padding-left: 15px; list-style-type: none; font-size: 0.7rem; color: #64748b;">
+                                <li style="margin-bottom:4px;"><b>Query + Document:</b> The two texts are concatenated and fed into the model together.</li>
+                                <li style="margin-bottom:4px;"><b>Encoder:</b> A deep transformer model (like BERT) that captures how every word in the query relates to every word in the document.</li>
+                                <li style="margin-bottom:4px;"><b>Sigmoid:</b> A mathematical function that converts the model's raw output into a probability score (0 to 1).</li>
+                            </ul>
+                        </li>
 					</ul>
 				</div>`;
 			retrievedIds = [5, 1];
@@ -161,12 +173,24 @@
 						<li style="margin-bottom:8px;"><b>1. The Redundancy Check:</b><br>
 							<span style="color:#64748b">Standard RAG would pick Chunks 1 and 2 because they both discuss "Attention." However, they are 90% identical in meaning.</span>
 						</li>
-						<li style="margin-bottom:8px;"><b>2. The Selection Formula ($Rel - Redundancy$):</b><br>
+						<li style="margin-bottom:8px;"><b>2. The Selection Formula (Rel - Redundancy):</b><br>
 							<span style="color:#64748b">MMR calculates a "penalty" for documents that are too similar to ones already picked. It sees Chunk 2 is redundant and skips it.</span>
 						</li>
 						<li style="margin-bottom:8px;"><b>3. The Diverse Swap:</b><br>
 							<span style="color:#64748b"><b>Action:</b> Swapped Chunk 2 for Chunk 3. Even though Chunk 3 is slightly "less relevant" to the word "Attention," it provides new info about "Vector Databases" that the LLM needs for a complete answer.</span>
 						</li>
+                        <li style="margin-top:15px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                            <b>4. The Detailed MMR Formula:</b><br>
+                            <span style="color:#64748b">The technical objective for selecting each new document (Di):</span>
+                            <div class="math-block" style="font-size: 0.75rem; padding: 10px; margin: 10px 0; color: #7c3aed; background: #f5f3ff;">
+                                MMR = arg max [ Lambda * Sim1(Di, Query) - (1 - Lambda) * max(Sim2(Di, Dj)) ]
+                            </div>
+                            <ul style="margin: 0; padding-left: 15px; list-style-type: none; font-size: 0.7rem; color: #64748b;">
+                                <li style="margin-bottom:4px;"><b>Lambda:</b> The "Diversity Balance" (1.0 = Relevance only, 0.0 = Diversity only).</li>
+                                <li style="margin-bottom:4px;"><b>Sim1:</b> Similarity to the query.</li>
+                                <li style="margin-bottom:4px;"><b>Sim2:</b> Similarity to documents already in the final set.</li>
+                            </ul>
+                        </li>
 					</ul>
 				</div>`;
 			retrievedIds = [1, 3];
@@ -192,6 +216,18 @@
 								<b>The Result:</b> This ensures you get <b>Chunk 5</b> (because it was an exact ID match) and <b>Chunk 1</b> (because it was the best conceptual match).
 							</span>
 						</li>
+                        <li style="margin-top:15px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                            <b>4. The Hybrid Formula (RRF):</b><br>
+                            <span style="color:#64748b">The system uses <b>Reciprocal Rank Fusion</b> to calculate the final blended score:</span>
+                            <div class="math-block" style="font-size: 0.75rem; padding: 10px; margin: 10px 0; color: #7c3aed; background: #f5f3ff;">
+                                Score(d) = sum( 1 / (k + rank(d, engine)) )
+                            </div>
+                            <ul style="margin: 0; padding-left: 15px; list-style-type: none; font-size: 0.7rem; color: #64748b;">
+                                <li style="margin-bottom:4px;"><b>rank(d, engine):</b> The position of document 'd' in the results of a specific search engine (Keyword or Vector).</li>
+                                <li style="margin-bottom:4px;"><b>k:</b> A smoothing constant (usually 60) that prevents documents ranked very low from having too much influence.</li>
+                                <li style="margin-bottom:4px;"><b>Reciprocal Logic:</b> Being rank #1 (1/1) is worth significantly more points than being rank #10 (1/10), rewarding documents that appear at the top of either list.</li>
+                            </ul>
+                        </li>
 					</ul>
 				</div>`;
 			retrievedIds = [5, 1];
