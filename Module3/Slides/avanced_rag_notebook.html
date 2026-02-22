@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced RAG Colab Notebook Visualization</title>
+    <style>
+        :root { --bg: #ffffff; --panel: #f6f8fa; --accent: #0969da; --text: #1f2328; --border: #d0d7de; --yellow-bg: #fff8c5; --yellow-border: #d4a72c; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { padding: 15px 25px; border-bottom: 1px solid var(--border); background: #fff; display: flex; justify-content: space-between; align-items: center; }
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        .pipeline-nav { width: 280px; padding: 20px; border-right: 1px solid var(--border); overflow-y: auto; background: var(--panel); }
+        .display-area { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .node { background: #ffffff; border: 1px solid var(--border); padding: 12px; margin-bottom: 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .node.active { border: 2px solid var(--accent); font-weight: 600; background: #f0f7ff; }
+        .code-container { background: #1b1f23; padding: 20px; border-radius: 8px 8px 0 0; color: #e6edf3; font-family: 'SFMono-Regular', monospace; line-height: 1.5; font-size: 0.9rem; white-space: pre; overflow-x: auto; }
+        .explanation-panel { background: var(--yellow-bg); border: 1px solid var(--yellow-border); border-top: none; padding: 20px; border-radius: 0 0 8px 8px; color: #24292f; line-height: 1.6; font-size: 0.95rem; margin-bottom: 20px; }
+        .math-box { background: rgba(0,0,0,0.05); padding: 12px; border-radius: 4px; margin: 10px 0; font-family: 'Courier New', monospace; font-weight: bold; border-left: 4px solid var(--yellow-border); }
+        .section-tag { font-size: 0.75rem; color: #57606a; text-transform: uppercase; margin: 15px 0 5px 5px; display: block; font-weight: bold; }
+        select { padding: 8px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; }
+        b { color: #000; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="font-weight: 600; font-size: 1.2rem;">RAG Strategy Logic Inspector</div>
+    <select id="strategy" onchange="renderPipeline()">
+        <option value="hybrid">Hybrid Search (BM25 + Vector)</option>
+        <option value="mmr">MMR (Diversity Re-ranking)</option>
+        <option value="transform">Query Transformation</option>
+    </select>
+</header>
+
+<div class="main-layout">
+    <div class="pipeline-nav" id="pipeline-nodes"></div>
+    <div class="display-area" id="display-content"></div>
+</div>
+
+<script>
+    const contentData = {
+        setup: {
+            title: "1. Data Ingestion & Indexing",
+            code: `file_names = ["alberteinstein_clr.pdf", "einstein_biography.pdf", "einstein-albert.pdf"]
+all_docs = []
+
+for file in file_names:
+    loader = PyPDFLoader(file)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=80)
+    chunks = loader.load_and_split(splitter)
+    all_docs.extend(chunks)`,
+            explanation: `<b>In-Depth Logic Analysis:</b>
+            <ul>
+                <li><b>Multi-Source Aggregation:</b> The loop iterates through three distinct PDF files to ensure the knowledge base is comprehensive across different Einstein biographies.</li>
+                <li><b>Recursive Splitter:</b> Unlike a character splitter, this looks for structural clues (like double newlines) to keep paragraphs together, ensuring semantic meaning is not severed mid-sentence.</li>
+                <li><b>chunk_size=800:</b> This is the "Goldilocks" zone—long enough to contain complete facts, but short enough to avoid overwhelming the LLM with irrelevant noise.</li>
+                <li><b>chunk_overlap=80:</b> Acts as a safety buffer (10%). If a critical keyword like "Relativity" appears at the split point, it is included in both chunks to ensure retrieval hits.</li>
+            </ul>`
+        },
+        embeddings: {
+            title: "2. Vector Store & Embeddings",
+            code: `embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+vector_db = FAISS.from_documents(all_docs, embeddings)`,
+            explanation: `<b>In-Depth Logic Analysis:</b>
+            <ul>
+                <li><b>Semantic Vectorization:</b> The <b>gemini-embedding-001</b> model maps text into a 768-dimensional coordinate system. Chunks with similar "meanings" are placed physically closer together in this mathematical space.</li>
+                <li><b>FAISS (Facebook AI Similarity Search):</b> A specialized C++ library wrapped in Python that allows for "Approximate Nearest Neighbor" search. It calculates the distance between the query vector and millions of document vectors in milliseconds.</li>
+                <li><b>Storage:</b> The <code>from_documents</code> method handles the heavy lifting of calculating all embeddings for the 3 PDFs and building the index simultaneously.</li>
+            </ul>
+            <div class="math-box">Similarity(A,B) = (A · B) / (||A|| * ||B||)</div>`
+        },
+        hybrid: {
+            title: "3. Hybrid Ensemble Retrieval",
+            code: `bm25_retriever = BM25Retriever.from_documents(all_docs)
+vector_retriever = vector_db.as_retriever(search_kwargs={"k": 5})
+
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[bm25_retriever, vector_retriever],
+    weights=[0.5, 0.5]
+)`,
+            explanation: `<b>In-Depth Hybrid Logic:</b>
+            <ul>
+                <li><b>Keyword (BM25):</b> This is an improved version of TF-IDF. It is essential for finding exact terms (e.g., "1921", "Nobel Prize", "Princeton") that vector search might sometimes generalize too much.</li>
+                <li><b>Vector Search:</b> Finds conceptual matches (e.g., if you ask about "Einstein's schooling," it finds chunks mentioning "Luitpold Gymnasium" even if the word "schooling" isn't there).</li>
+                <li><b>Ensemble Weighting:</b> By setting weights to 0.5/0.5, we perform Reciprocal Rank Fusion (RRF). This ensures that if a document is ranked #1 in Keywords and #10 in Vectors, it still ends up as a top candidate.</li>
+            </ul>
+            <div class="math-box">Final_Score = (w1 * BM25_Score) + (w2 * Vector_Score)</div>`
+        },
+        mmr: {
+            title: "3. MMR Diversity Retrieval",
+            code: `retriever = vector_db.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 5, "fetch_k": 20, "lambda_mult": 0.5}
+)`,
+            explanation: `<b>In-Depth MMR Logic:</b>
+            <ul>
+                <li><b>The Redundancy Problem:</b> Standard vector search often returns 5 chunks that all say the exact same thing. MMR solves this.</li>
+                <li><b>fetch_k=20:</b> The algorithm "over-fetches" 20 candidates. This gives it a wide enough variety to choose the best "unique" representatives.</li>
+                <li><b>lambda_mult=0.5:</b> This is the "Diversity Knob." 1.0 would be pure relevance (standard search). 0.0 would be pure diversity (choosing the most different chunks possible). 0.5 ensures the LLM gets relevant but distinct information.</li>
+            </ul>
+            <div class="math-box">MMR_Score = Lambda * Sim(Query, Doc) - (1-Lambda) * Max_Sim(Doc, Selected)</div>`
+        },
+        transform: {
+            title: "3. Query Transformation (Multi-Query)",
+            code: `multi_query_chain = ( prompt | llm | StrOutputParser() | (lambda x: x.split("\\n")) )`,
+            explanation: `<b>In-Depth Transformation Logic:</b>
+            <ul>
+                <li><b>Synonym Generation:</b> The LLM takes a simple query like "Einstein's education" and generates three variations like "Where did Einstein go to university?", "Einstein academic history", and "Einstein childhood schooling."</li>
+                <li><b>Overcoming Semantic Gaps:</b> Vector embeddings are sensitive to phrasing. By searching for four variations of the same intent, we drastically increase the probability of hitting the correct document chunks.</li>
+                <li><b>Result Merging:</b> The retriever performs a union of all results found across all generated queries, then deduplicates them.</li>
+            </ul>`
+        },
+        generate: {
+            title: "4. LLM Response Generation",
+            code: `qa_chain = load_qa_chain(llm, chain_type="stuff")
+result = qa_chain.invoke({"input_documents": docs, "question": query})`,
+            explanation: `<b>In-Depth Generation Logic:</b>
+            <ul>
+                <li><b>"Stuff" Chain:</b> This is the most popular RAG method. It literally takes the text from the top 5 documents and "stuffs" them into the hidden system prompt.</li>
+                <li><b>Temperature=0:</b> This sets the model to "Greedy Decoding." It removes all creativity/randomness, forcing the model to only use the provided document context to form an answer.</li>
+                <li><b>Contextual Grounding:</b> The LLM is instructed: "Use the following context to answer. If you don't know based on the context, say you don't know."</li>
+            </ul>
+            <div class="math-box">Prompt = {System_Instruction} + {Retrieved_Context} + {User_Query}</div>`
+        }
+    };
+
+    function renderPipeline() {
+        const strategy = document.getElementById('strategy').value;
+        const nav = document.getElementById('pipeline-nodes');
+        nav.innerHTML = `
+            <span class="section-tag">Preparation</span>
+            <div class="node" id="n-setup" onclick="showBlock('setup')">1. Ingestion</div>
+            <div class="node" id="n-embed" onclick="showBlock('embeddings')">2. Embeddings</div>
+            <span class="section-tag">Strategy</span>
+            <div class="node" id="n-strat" onclick="showBlock('${strategy}')">3. ${strategy.toUpperCase()}</div>
+            <span class="section-tag">Final</span>
+            <div class="node" id="n-generate" onclick="showBlock('generate')">4. Generation</div>
+        `;
+        showBlock('setup');
+    }
+
+    function showBlock(key) {
+        const data = contentData[key];
+        const display = document.getElementById('display-content');
+        display.innerHTML = `
+            <h3 style="margin-top:0; color:var(--accent);">${data.title}</h3>
+            <div class="code-container">${data.code}</div>
+            <div class="explanation-panel">${data.explanation}</div>
+        `;
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+        const activeId = (key === 'setup' ? 'n-setup' : (key === 'embeddings' ? 'n-embed' : (key === 'generate' ? 'n-generate' : 'n-strat')));
+        document.getElementById(activeId).classList.add('active');
+    }
+
+    renderPipeline();
+</script>
+</body>
+</html>
