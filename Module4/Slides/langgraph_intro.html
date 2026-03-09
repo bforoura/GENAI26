@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph: Workflow Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .node { transition: all 0.3s ease; border: 2px solid #e2e8f0; background: white; z-index: 10; }
+        .node.active { border-color: #3b82f6; background-color: #eff6ff; transform: scale(1.05); box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.5); }
+        .node.completed { border-color: #10b981; background-color: #ecfdf5; }
+
+        .graph-container { position: relative; width: 100%; height: 550px; }
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .edge-path { fill: none; stroke: #cbd5e1; stroke-width: 2; marker-end: url(#arrowhead); transition: stroke 0.3s; }
+        .edge-path.highlight { stroke: #3b82f6; stroke-width: 3; }
+        .edge-path.active-loop { stroke: #f43f5e; stroke-dasharray: 5; animation: dash 1s linear infinite; }
+        .edge-label { font-size: 10px; font-weight: bold; fill: #64748b; font-family: sans-serif; opacity: 0.4; transition: opacity 0.3s; }
+        .edge-label.highlight { opacity: 1; fill: #1e293b; }
+
+        /* Smaller font for code section */
+        .code-text { font-size: 0.7rem; line-height: 1.1rem; }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -10; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800">LangGraph Workflow</h1>
+            <p class="text-slate-600">Step through the graph to see how the code executes in real-time</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+            <div class="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="font-semibold mb-4 text-slate-700">Graph Topology</h2>
+
+                <div class="graph-container flex flex-col items-center">
+                    <svg id="graph-svg">
+                        <defs>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" />
+                            </marker>
+                        </defs>
+
+                        <path id="edge-res-writ" d="M 192 80 L 192 140" class="edge-path" />
+                        <path id="edge-writ-crit" d="M 192 215 L 192 275" class="edge-path" />
+                        <path id="edge-crit-end" d="M 192 355 L 192 455" class="edge-path" />
+                        <path id="edge-loop" d="M 288 315 C 420 315, 420 40, 288 40" class="edge-path" />
+
+                        <text id="label-finish" x="200" y="420" class="edge-label">"finish"</text>
+                        <text id="label-improve" x="320" y="150" class="edge-label">"improve"</text>
+                    </svg>
+
+                    <div id="node-researcher" class="node p-4 rounded-lg w-48 text-center mt-2">
+                        <p class="font-bold text-sm">researcher</p>
+                        <p class="text-[10px] text-slate-500 uppercase">research_func</p>
+                    </div>
+
+                    <div class="h-16"></div>
+
+                    <div id="node-writer" class="node p-4 rounded-lg w-48 text-center">
+                        <p class="font-bold text-sm">writer</p>
+                        <p class="text-[10px] text-slate-500 uppercase">writer_func</p>
+                    </div>
+
+                    <div class="h-16"></div>
+
+                    <div id="node-critic" class="node p-4 rounded-lg w-48 text-center border-amber-300 bg-amber-50">
+                        <p class="font-bold text-sm text-amber-900">critic</p>
+                        <p class="text-[10px] text-amber-700 uppercase font-mono">should_continue</p>
+                    </div>
+
+                    <div class="h-24"></div>
+
+                    <div id="node-end" class="node p-2 rounded-lg w-24 text-center border-dashed">
+                        <p class="font-bold text-xs text-slate-400">END</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 bg-slate-800 text-slate-100 p-6 rounded-xl shadow-sm h-fit">
+                <h2 class="font-semibold mb-4 text-emerald-400">Execution State</h2>
+                <div class="space-y-4 font-mono text-xs">
+                    <div class="bg-slate-900 p-3 rounded border border-slate-700">
+                        <p class="text-slate-500">Active Node:</p>
+                        <p id="current-step-display" class="text-yellow-400 font-bold">IDLE</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-500">iteration:</p>
+                        <p id="state-iter" class="text-blue-300">0</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-500">quality:</p>
+                        <p id="state-quality" class="text-blue-300">0%</p>
+                    </div>
+                    <hr class="border-slate-700">
+
+                    <button id="start-btn" onclick="initGraph()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition">
+                        Initialize Graph
+                    </button>
+
+                    <button id="next-btn" onclick="step()" disabled class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded transition flex items-center justify-center gap-2">
+                        <span>Next Step</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="mt-6 bg-white/5 p-3 rounded-lg min-h-[100px]" id="logs">
+                    <p class="text-slate-500 text-[10px] italic">System Logs...</p>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 bg-slate-900 text-slate-300 p-6 rounded-xl shadow-sm overflow-x-auto">
+                <h2 class="font-semibold mb-4 text-blue-400 border-b border-slate-700 pb-2">Implementation Logic</h2>
+                <pre class="text-blue-100 code-text">
+from langgraph.graph import StateGraph, END
+
+# 1. Define the Graph
+workflow = StateGraph(AgentState)
+
+# 2. Add Nodes (The boxes in the diagram)
+workflow.add_node("researcher", research_func)
+workflow.add_node("writer", writer_func)
+
+# 3. Add Normal Edges (The straight lines)
+workflow.set_entry_point("researcher")
+workflow.add_edge("researcher", "writer")
+
+# 4. Add the Loop (The curved arrow)
+workflow.add_conditional_edges(
+    "writer",
+    should_continue, # Decides where to go next
+    {
+        "improve": "researcher", # Loop back
+        "finish": END            # Exit graph
+    }
+)</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let state = { iteration: 0, quality: 0, currentNode: null };
+        const logs = document.getElementById('logs');
+        const nextBtn = document.getElementById('next-btn');
+        const startBtn = document.getElementById('start-btn');
+
+        function addLog(msg, color = 'text-slate-300') {
+            const p = document.createElement('p');
+            p.className = `text-[10px] ${color} mb-1 border-b border-white/5 pb-1`;
+            p.innerHTML = `> ${msg}`;
+            logs.prepend(p);
+            if (logs.children.length > 6) logs.lastElementChild.remove();
+        }
+
+        function updateUI() {
+            document.getElementById('state-iter').innerText = state.iteration;
+            document.getElementById('state-quality').innerText = state.quality + '%';
+            document.getElementById('current-step-display').innerText = (state.currentNode || 'IDLE').toUpperCase();
+
+            document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+            if(state.currentNode) {
+                const nodeEl = document.getElementById(`node-${state.currentNode}`);
+                if(nodeEl) nodeEl.classList.add('active');
+            }
+
+            document.querySelectorAll('.edge-path').forEach(e => e.classList.remove('highlight', 'active-loop'));
+            document.querySelectorAll('.edge-label').forEach(l => l.classList.remove('highlight'));
+        }
+
+        function initGraph() {
+            state = { iteration: 0, quality: 0, currentNode: 'researcher' };
+            document.querySelectorAll('.node').forEach(n => n.classList.remove('completed'));
+            addLog("Entry point: researcher", "text-blue-400");
+            startBtn.disabled = true;
+            nextBtn.disabled = false;
+            updateUI();
+        }
+
+        function step() {
+            switch(state.currentNode) {
+                case 'researcher':
+                    state.iteration++;
+                    addLog(`Node: researcher (Iter ${state.iteration})`);
+                    document.getElementById('edge-res-writ').classList.add('highlight');
+                    state.currentNode = 'writer';
+                    break;
+                case 'writer':
+                    state.quality = Math.floor(Math.random() * 100);
+                    addLog(`Node: writer (Quality: ${state.quality}%)`);
+                    document.getElementById('edge-writ-crit').classList.add('highlight');
+                    state.currentNode = 'critic';
+                    break;
+                case 'critic':
+                    addLog("Edge: should_continue evaluation");
+                    if (state.quality < 70 && state.iteration < 3) {
+                        addLog(`Route: improve -> researcher`, "text-rose-400");
+                        document.getElementById('edge-loop').classList.add('active-loop');
+                        document.getElementById('label-improve').classList.add('highlight');
+                        state.currentNode = 'researcher';
+                    } else {
+                        addLog(`Route: finish -> END`, "text-emerald-400");
+                        document.getElementById('edge-crit-end').classList.add('highlight');
+                        document.getElementById('label-finish').classList.add('highlight');
+                        state.currentNode = 'end';
+                        finalize();
+                    }
+                    break;
+                default:
+                    nextBtn.disabled = true;
+                    startBtn.disabled = false;
+            }
+            updateUI();
+        }
+
+        function finalize() {
+            document.querySelectorAll('.node').forEach(n => n.classList.add('completed'));
+            nextBtn.disabled = true;
+            startBtn.disabled = false;
+            state.currentNode = null;
+        }
+    </script>
+</body>
+</html>

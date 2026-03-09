@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph Travel Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .node { transition: all 0.3s ease; border: 2px solid #e2e8f0; background: white; position: relative; }
+        .node.active { border-color: #3b82f6; background-color: #eff6ff; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .node.paused { border-color: #ef4444; background-color: #fef2f2; animation: border-pulse 2s infinite; }
+        .node.completed { border-color: #10b981; background-color: #ecfdf5; }
+
+        @keyframes border-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .state-string { color: #059669; }
+        .state-bool { color: #7c3aed; font-weight: bold; }
+        .state-null { color: #94a3b8; }
+        .code-font { font-family: 'Courier New', Courier, monospace; }
+        .code-keyword { color: #2563eb; font-weight: bold; }
+        .code-comment { color: #94a3b8; font-style: italic; }
+
+        .slide-in { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800">Human-in-the-Loop Workflow</h1>
+            <p class="text-slate-600"></p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <div class="lg:col-span-4 bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                <h2 class="font-bold text-slate-700 uppercase mb-8 tracking-tight text-sm">Interactive Graph</h2>
+                <div class="flex flex-col items-center space-y-10">
+
+                    <div id="node-draft" class="node p-6 rounded-xl w-64 text-center shadow-sm">
+                        <p class="font-black text-slate-800 text-sm">Itinerary Planner</p>
+                        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Node: "planner"</p>
+                    </div>
+
+                    <div class="relative flex flex-col items-center">
+                        <div class="h-10 w-1 bg-slate-200"></div>
+                        <div id="breakpoint-icon" class="hidden absolute top-2 bg-red-600 text-white p-1.5 rounded-full shadow-xl z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div id="node-publish" class="node p-6 rounded-xl w-64 text-center shadow-sm border-dashed">
+                        <p class="font-black text-slate-800 text-sm">Booking Engine</p>
+                        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Node: "booker"</p>
+                    </div>
+
+                    <div id="loop-edge" class="hidden flex flex-col items-center text-blue-600 font-bold text-[10px] animate-bounce">
+                        <span class="bg-blue-100 px-2 py-1 rounded font-bold">EDGE: booker -> planner</span>
+                        <div class="h-4 w-0.5 bg-blue-400 mt-1"></div>
+                    </div>
+                </div>
+
+                <div class="mt-10 bg-white p-5 rounded-xl border border-slate-200 shadow-inner">
+                    <h3 class="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest">Technical Implementation</h3>
+                    <div class="code-font text-[11px] text-slate-700 space-y-1">
+                        <p>builder = StateGraph(TravelState)</p>
+                        <p class="code-comment"># Nodes</p>
+                        <p>builder.add_node("planner", plan_node)</p>
+                        <p>builder.add_node("booker", book_node)</p>
+                        <p class="code-comment pt-1"># Edges (The missing piece)</p>
+                        <p>builder.<span class="code-keyword">set_entry_point</span>("planner")</p>
+                        <p>builder.<span class="code-keyword">add_edge</span>("planner", "booker")</p>
+                        <p>builder.<span class="code-keyword">add_edge</span>("booker", END)</p>
+                        <p class="code-comment pt-1"># Compile with interrupt</p>
+                        <p>graph = builder.compile(</p>
+                        <p class="pl-4 ml-2 border-l-2 border-amber-300 bg-amber-50">interrupt_before=["booker"]</p>
+                        <p>)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                <div id="review-panel" class="bg-white p-6 rounded-xl shadow-md border-2 border-slate-100 opacity-40 pointer-events-none transition-all duration-300">
+                    <h2 class="font-black text-red-600 text-xs uppercase mb-4 tracking-widest flex items-center gap-2">
+                        <span class="h-2 w-2 bg-red-600 rounded-full animate-pulse"></span>
+                        Human Review Point
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase mb-2">Review Content</label>
+                            <div id="itinerary-display" class="text-sm font-medium whitespace-pre-line text-slate-700 h-48 overflow-y-auto bg-white p-3 border rounded shadow-inner">
+                                Awaiting execution...
+                            </div>
+                        </div>
+                        <div id="action-buttons" class="flex gap-3">
+                            <button onclick="approve()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-black py-3 rounded-xl text-sm transition transform active:scale-95">APPROVE</button>
+                            <button onclick="showRejectInput()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-xl text-sm transition transform active:scale-95">REJECT</button>
+                        </div>
+                        <div id="reject-input-area" class="hidden space-y-3 pt-2 border-t border-slate-100">
+                            <input type="text" id="feedback-text" placeholder="Explain what to change..." class="w-full p-3 border-2 border-rose-200 rounded-lg text-sm outline-none focus:border-rose-400">
+                            <button onclick="submitFeedback()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl text-sm shadow-lg">UPDATE STATE & RE-RUN</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl shadow-xl">
+                    <button id="start-btn" onclick="runToBreakpoint()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transition transform active:scale-95">
+                        START WORKFLOW
+                    </button>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 bg-white p-6 rounded-xl shadow-md border border-slate-200 flex flex-col">
+                <h2 class="font-black text-blue-700 uppercase text-xs mb-4 border-b pb-2 tracking-widest">TravelState Inspector</h2>
+                <div id="state-json" class="code-font text-[13px] leading-relaxed p-4 bg-slate-50 rounded-lg border border-slate-200 flex-grow h-96 overflow-y-auto slide-in">
+                    <p>{</p>
+                    <div class="pl-4">
+                        <p>"destination": <span class="state-string">"Kyoto"</span>,</p>
+                        <p>"itinerary": <span id="state-itinerary-val" class="state-null">null</span>,</p>
+                        <p>"human_feedback": <span id="state-feedback-val" class="state-null">null</span>,</p>
+                        <p>"is_approved": <span id="state-approved-val" class="state-bool">false</span>,</p>
+                        <p>"status": <span id="state-status-val" class="state-string">"initializing"</span></p>
+                    </div>
+                    <p>}</p>
+                </div>
+                <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p class="text-[11px] text-blue-800 leading-tight">
+                        <strong>Insight:</strong> Edges are the instructions for the graph. Without them, the state wouldn't know to move from <code>planner</code> to <code>booker</code>.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const reviewPanel = document.getElementById('review-panel');
+        const itineraryDisplay = document.getElementById('itinerary-display');
+        const startBtn = document.getElementById('start-btn');
+        const rejectArea = document.getElementById('reject-input-area');
+        const actionBtns = document.getElementById('action-buttons');
+
+        const stateItinerary = document.getElementById('state-itinerary-val');
+        const stateFeedback = document.getElementById('state-feedback-val');
+        const stateApproved = document.getElementById('state-approved-val');
+        const stateStatus = document.getElementById('state-status-val');
+
+        let currentItinerary = `DESTINATION: Kyoto, Japan\nESTIMATE: $2,800\n\nDAY 1: Private Car to Gion.\nDAY 2: Exclusive Monk Tour.\nDAY 3: Luxury Spa Day.\nDAY 4: Helicopter tour of Mt. Fuji.`;
+
+        function updateStateUI(itinerary, feedback, approved, status) {
+            stateItinerary.innerHTML = itinerary ? `<span class="state-string">"Generated..."</span>` : `<span class="state-null">null</span>`;
+            stateFeedback.innerHTML = feedback ? `<span class="state-string">"${feedback}"</span>` : `<span class="state-null">null</span>`;
+            stateApproved.innerHTML = `<span class="state-bool">${approved}</span>`;
+            stateStatus.innerText = `"${status}"`;
+        }
+
+        function runToBreakpoint() {
+            startBtn.disabled = true;
+            startBtn.classList.replace('bg-blue-600', 'bg-slate-600');
+            document.getElementById('node-draft').classList.add('active');
+            updateStateUI(false, null, false, "planning");
+
+            setTimeout(() => {
+                document.getElementById('node-draft').classList.replace('active', 'completed');
+                itineraryDisplay.innerText = currentItinerary;
+                updateStateUI(true, null, false, "awaiting_approval");
+
+                setTimeout(() => {
+                    document.getElementById('node-publish').classList.add('paused');
+                    document.getElementById('breakpoint-icon').classList.remove('hidden');
+                    reviewPanel.classList.remove('opacity-40', 'pointer-events-none');
+                }, 600);
+            }, 1200);
+        }
+
+        function showRejectInput() {
+            actionBtns.classList.add('hidden');
+            rejectArea.classList.remove('hidden');
+        }
+
+        function submitFeedback() {
+            const feedback = document.getElementById('feedback-text').value;
+            if (!feedback) return;
+
+            updateStateUI(true, feedback, false, "re-routing");
+
+            if (feedback.toLowerCase().includes("price") || feedback.toLowerCase().includes("expensive")) {
+                currentItinerary = `DESTINATION: Kyoto, Japan (BUDGET)\nESTIMATE: $850\n\nDAY 1: Train & Street food.\nDAY 2: Fushimi Inari Hike.\nDAY 3: Walking tour.\nDAY 4: Nishiki Market.`;
+            } else {
+                currentItinerary = `DESTINATION: Kyoto, Japan (REVISED)\nESTIMATE: $1,200\n\nDAY 1: Bamboo Grove.\nDAY 2: Tea Ceremony.\nDAY 3: Zen Meditation.\nDAY 4: Nature Hike.`;
+            }
+
+            rejectArea.classList.add('hidden');
+            actionBtns.classList.remove('hidden');
+            reviewPanel.classList.add('opacity-40', 'pointer-events-none');
+            document.getElementById('node-publish').classList.remove('paused');
+            document.getElementById('breakpoint-icon').classList.add('hidden');
+            document.getElementById('loop-edge').classList.remove('hidden');
+
+            setTimeout(() => {
+                document.getElementById('loop-edge').classList.add('hidden');
+                document.getElementById('feedback-text').value = "";
+                runToBreakpoint();
+            }, 1000);
+        }
+
+        function approve() {
+            updateStateUI(true, null, true, "completed");
+            reviewPanel.classList.add('opacity-40', 'pointer-events-none');
+            document.getElementById('node-publish').classList.replace('paused', 'completed');
+            document.getElementById('breakpoint-icon').classList.add('hidden');
+            startBtn.innerText = "FINISH";
+        }
+    </script>
+</body>
+</html>

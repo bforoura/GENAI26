@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph: State & Persistence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .node { transition: all 0.3s ease; border: 2px solid #e2e8f0; background: white; position: relative; }
+        .node.active { border-color: #3b82f6; background-color: #eff6ff; transform: scale(1.05); box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.5); }
+        .node.completed { border-color: #10b981; background-color: #ecfdf5; }
+
+        .state-key { color: #94a3b8; }
+        .state-string { color: #22c55e; }
+        .state-number { color: #f59e0b; }
+        .state-bool { color: #8b5cf6; }
+
+        .checkpoint-flash { animation: flash 0.8s ease-out; }
+        @keyframes flash {
+            0% { background-color: rgba(59, 130, 246, 0.5); }
+            100% { background-color: transparent; }
+        }
+
+        .code-text { font-size: 0.75rem; line-height: 1.2rem; }
+
+        /* Progress bar for persistence simulation */
+        .progress-bar { width: 0%; transition: width 0.1s linear; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800">LangGraph: The Anatomy of State</h1>
+            <p class="text-slate-600">Context Awareness, Persistence, and Interactivity</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+
+            <div class="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="font-semibold mb-6 text-slate-700 flex items-center gap-2">
+                    <span class="p-1.5 bg-blue-100 text-blue-600 rounded">🤖</span>
+                    Technical Support Workflow
+                </h2>
+
+                <div class="flex flex-col items-center space-y-6 relative">
+                    <div id="node-diagnosis" class="node p-4 rounded-lg w-64 text-center">
+                        <p class="font-bold text-sm">1. Diagnosis Node</p>
+                        <p class="text-[10px] text-slate-500 uppercase">Runs Speed Test</p>
+                    </div>
+
+                    <div class="text-slate-300">↓</div>
+
+                    <div id="node-fixing" class="node p-4 rounded-lg w-64 text-center">
+                        <p class="font-bold text-sm">2. Fixing Node</p>
+                        <p class="text-[10px] text-slate-500 uppercase">Context-Aware Actions</p>
+                        <div id="reboot-overlay" class="hidden absolute inset-0 bg-slate-800/90 rounded-lg flex flex-col items-center justify-center p-2 z-20">
+                            <p class="text-white text-[10px] mb-2 font-bold">ROUTER REBOOTING...</p>
+                            <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                <div id="reboot-progress" class="progress-bar bg-blue-500 h-full"></div>
+                            </div>
+                            <p class="text-blue-300 text-[8px] mt-1">Checkpointer: State Saved</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300">↓</div>
+
+                    <div id="node-supervisor" class="node p-4 rounded-lg w-64 text-center border-amber-300">
+                        <p class="font-bold text-sm">3. Supervisor Node</p>
+                        <p class="text-[10px] text-slate-500 uppercase">Analyzes retry_count</p>
+                    </div>
+
+                    <div class="flex justify-between w-full px-12 mt-4">
+                        <div id="path-resolve" class="flex flex-col items-center opacity-20">
+                            <div class="text-slate-300">↓</div>
+                            <div class="p-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">SOLVED</div>
+                        </div>
+                        <div id="path-human" class="flex flex-col items-center opacity-20">
+                            <div class="text-slate-300">↓</div>
+                            <div class="p-2 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">ESC. TO HUMAN</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 flex flex-col gap-6">
+                <div class="bg-slate-800 text-slate-100 p-6 rounded-xl shadow-sm">
+                    <h2 class="font-semibold mb-4 text-blue-400">Controls</h2>
+                    <button id="next-btn" onclick="nextStep()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded transition flex items-center justify-center gap-2 mb-3">
+                        <span>Next Step</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <button onclick="resetDemo()" class="w-full text-slate-400 hover:text-white text-xs py-1 transition underline">Reset Scenario</button>
+                </div>
+
+                <div id="state-inspector" class="bg-slate-900 text-blue-100 p-6 rounded-xl shadow-sm border border-slate-700 flex-grow font-mono">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-semibold text-emerald-400 text-xs uppercase tracking-widest">Agent State</h2>
+                        <span id="checkpoint-tag" class="hidden text-[8px] bg-blue-900 text-blue-200 px-2 py-0.5 rounded">CHECKPOINTED</span>
+                    </div>
+                    <div class="text-xs space-y-1">
+                        <p>{</p>
+                        <p class="ml-4"><span class="state-key">"issue"</span>: <span id="s-issue" class="state-string">"internet_slow"</span>,</p>
+                        <p class="ml-4"><span class="state-key">"type"</span>: <span id="s-type" class="state-string">null</span>,</p>
+                        <p class="ml-4"><span class="state-key">"latency"</span>: <span id="s-latency" class="state-string">null</span>,</p>
+                        <p class="ml-4"><span class="state-key">"retries"</span>: <span id="s-retries" class="state-number">0</span>,</p>
+                        <p class="ml-4"><span class="state-key">"resolved"</span>: <span id="s-resolved" class="state-bool">false</span>,</p>
+                        <p class="ml-4"><span class="state-key">"route"</span>: <span id="s-route" class="state-string">"bot"</span></p>
+                        <p>}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 id="edu-title" class="font-bold text-slate-800 mb-2">Initialize Workflow</h3>
+                    <p id="edu-desc" class="text-sm text-slate-600 leading-relaxed">
+                        The user reports "My internet is slow." Click Next to begin the Diagnosis phase.
+                    </p>
+                </div>
+
+                <div class="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm">
+                    <h3 class="text-blue-400 text-sm font-bold mb-3">Behind the Scenes:</h3>
+                    <pre class="code-text text-slate-400 italic" id="code-snippet">
+# Waiting for execution...
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let step = 0;
+        let state = {
+            issue: "internet_slow",
+            type: null,
+            latency: null,
+            retries: 0,
+            resolved: false,
+            route: "bot"
+        };
+
+        function updateUI(flashState = false) {
+            document.getElementById('s-issue').innerText = `"${state.issue}"`;
+            document.getElementById('s-type').innerText = state.type ? `"${state.type}"` : "null";
+            document.getElementById('s-latency').innerText = state.latency ? `"${state.latency}"` : "null";
+            document.getElementById('s-retries').innerText = state.retries;
+            document.getElementById('s-resolved').innerText = state.resolved;
+            document.getElementById('s-route').innerText = `"${state.route}"`;
+
+            if(flashState) {
+                const inspector = document.getElementById('state-inspector');
+                inspector.classList.add('checkpoint-flash');
+                setTimeout(() => inspector.classList.remove('checkpoint-flash'), 800);
+            }
+        }
+
+        async function nextStep() {
+            step++;
+            const eduTitle = document.getElementById('edu-title');
+            const eduDesc = document.getElementById('edu-desc');
+            const codeSnippet = document.getElementById('code-snippet');
+            const nextBtn = document.getElementById('next-btn');
+
+            if (step === 1) {
+                // 1. Context Awareness
+                document.getElementById('node-diagnosis').classList.add('active');
+                state.type = "high_latency";
+                state.latency = "350ms";
+                updateUI(true);
+
+                eduTitle.innerText = "1. Context Awareness";
+                eduDesc.innerText = "The bot runs a test. It finds the speed is fine but latency is high. It updates the state. Now, the next node knows EXACTLY what the problem is without asking the user again.";
+                codeSnippet.innerText = 'state["type"] = "high_latency"\nstate["latency"] = "350ms"';
+            }
+            else if (step === 2) {
+                // 2. Persistence / Reboot
+                document.getElementById('node-diagnosis').classList.remove('active');
+                document.getElementById('node-diagnosis').classList.add('completed');
+                document.getElementById('node-fixing').classList.add('active');
+
+                eduTitle.innerText = "2. Persistence (The Checkpointer)";
+                eduDesc.innerText = "A router reboot is required. The bot saves the state to the Checkpointer. Even if the connection drops, the bot will remember we are waiting for a reboot.";
+                codeSnippet.innerText = '# LangGraph saves state\ncheckpointer.save(thread_id, state)';
+
+                // Simulate Reboot
+                nextBtn.disabled = true;
+                document.getElementById('reboot-overlay').classList.remove('hidden');
+                document.getElementById('checkpoint-tag').classList.remove('hidden');
+
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 2;
+                    document.getElementById('reboot-progress').style.width = progress + '%';
+                    if(progress >= 100) {
+                        clearInterval(interval);
+                        nextBtn.disabled = false;
+                        document.getElementById('reboot-overlay').classList.add('hidden');
+                        document.getElementById('checkpoint-tag').classList.add('hidden');
+                        eduDesc.innerText = "Reboot complete! Because of Persistence, the bot resumes: 'Is the light green now?' instead of 'How can I help you?'";
+                    }
+                }, 50);
+            }
+            else if (step === 3) {
+                // 3. Interactivity / Software Fix Loop
+                state.retries = 1;
+                updateUI(true);
+                eduTitle.innerText = "3. Interactivity (The Loop)";
+                eduDesc.innerText = "The software fix failed. The state is updated with retries: 1. The flow will loop back if it doesn't work.";
+                codeSnippet.innerText = 'state["retries"] += 1\n# Routing based on retry_count';
+            }
+            else if (step === 4) {
+                // 4. Supervisor Intervenes
+                state.retries = 3;
+                state.route = "human_agent";
+                updateUI(true);
+
+                document.getElementById('node-fixing').classList.remove('active');
+                document.getElementById('node-fixing').classList.add('completed');
+                document.getElementById('node-supervisor').classList.add('active');
+
+                eduTitle.innerText = "Dynamic Behavior Change";
+                eduDesc.innerText = "The Supervisor sees retries reached 3. It changes the 'route' to 'human_agent'. The graph behavior changes completely based on the data collected.";
+                codeSnippet.innerText = 'if state["retries"] >= 3:\n    state["route"] = "human_agent"';
+
+                document.getElementById('path-human').style.opacity = "1";
+                nextBtn.disabled = true;
+            }
+        }
+
+        function resetDemo() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
