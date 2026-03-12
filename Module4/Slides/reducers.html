@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph Reducers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .node { transition: all 0.3s ease; border: 2px solid #cbd5e1; background: #ffffff; }
+        .node.active { border-color: #3b82f6; background-color: #eff6ff; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); transform: translateY(-2px); }
+        .node.completed { border-color: #10b981; background-color: #ecfdf5; opacity: 0.8; }
+
+        .state-item {
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid rgba(0,0,0,0.1);
+            animation: slide-in 0.3s ease-out;
+        }
+        @keyframes slide-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .code-font { font-family: 'Courier New', Courier, monospace; }
+        .tab-btn { border-bottom: 4px solid transparent; transition: all 0.2s; }
+        .tab-btn.active { border-color: #3b82f6; color: #3b82f6; font-weight: 800; }
+
+        .variable-box { transition: all 0.3s ease; border: 1px dashed #cbd5e1; }
+        .variable-active { border-color: #3b82f6; background-color: #f0f9ff; }
+
+        .pulse-hint { animation: pulse-blue 2s infinite; }
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+
+        .method-row { border-left: 4px solid transparent; transition: all 0.3s; }
+        .method-active { border-left-color: #3b82f6; background-color: #f0f7ff; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+
+    <div class="max-w-7xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
+
+        <div class="bg-slate-100 p-6 border-b border-slate-200">
+
+            <h1 class="text-2xl font-bold text-slate-800 mb-2">Understanding LangGraph Reducers</h1>
+            <p class="text-slate-600 text-sm leading-relaxed max-w-4xl">
+                <b>Reducers</b> dictate how state updates are applied. Paths A, B, and C show how different logics handle findings from multiple experts.
+            </p>
+        </div>
+
+        <div class="flex border-b border-slate-200 bg-white">
+            <button onclick="setMode('overwrite')" id="tab-overwrite" class="tab-btn active flex-1 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Path A: Overwrite</button>
+            <button onclick="setMode('reducer')" id="tab-reducer" class="tab-btn flex-1 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Path B: Add</button>
+            <button onclick="setMode('custom')" id="tab-custom" class="tab-btn flex-1 py-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Path C: Custom (Dedupe)</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12">
+
+            <div class="lg:col-span-4 p-6 border-r border-slate-100">
+                <div id="instruction-box" class="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <h3 id="step-title" class="text-xs font-black text-blue-600 uppercase mb-2">Simulation Ready</h3>
+                    <p id="instruction" class="text-sm text-blue-900 font-medium leading-snug">Click "Start Simulation" to begin.</p>
+                </div>
+
+                <div class="relative flex flex-col items-center gap-8 py-2">
+                    <div id="n-fan" class="node p-3 rounded-xl w-36 text-center font-bold text-slate-700 shadow-sm text-xs">Code Submission</div>
+                    <div class="flex gap-1">
+                        <div id="n-1" class="node p-2 rounded-lg w-24 text-center text-[9px] font-bold shadow-sm h-14 flex items-center justify-center">Bug Finder</div>
+                        <div id="n-2" class="node p-2 rounded-lg w-24 text-center text-[9px] font-bold shadow-sm h-14 flex items-center justify-center">Syntax Checker</div>
+                        <div id="n-3" class="node p-2 rounded-lg w-24 text-center text-[9px] font-bold shadow-sm h-14 flex items-center justify-center">Security Auditor</div>
+                    </div>
+                    <div id="n-join" class="node p-3 rounded-xl w-36 text-center font-bold text-slate-700 shadow-sm text-xs">Final Report</div>
+                </div>
+
+                <div class="mt-8 flex gap-3">
+                    <button id="step-btn" onclick="nextStep()" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-black shadow-lg hover:bg-blue-700 transition active:scale-95 text-xs uppercase">
+                        START SIMULATION
+                    </button>
+                    <button onclick="reset()" class="bg-slate-100 text-slate-600 px-4 rounded-xl font-bold hover:bg-slate-200 border border-slate-200 text-xs">RESET</button>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 bg-slate-50 p-6 border-r border-slate-100 flex flex-col">
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Variable Tracker: f(S, U)</h3>
+                <div class="space-y-4 mb-6">
+                    <div id="var-s" class="variable-box p-3 rounded-lg bg-white">
+                        <p class="text-[9px] font-black text-slate-400 uppercase">Current State (S)</p>
+                        <p id="val-s" class="code-font text-[10px] text-slate-600 mt-1">None</p>
+                    </div>
+                    <div id="var-u" class="variable-box p-3 rounded-lg bg-white">
+                        <p class="text-[9px] font-black text-slate-400 uppercase">New Update (U)</p>
+                        <p id="val-u" class="code-font text-[10px] text-slate-600 mt-1">None</p>
+                    </div>
+                    <div id="var-next" class="variable-box p-3 rounded-lg border-solid border-2 border-blue-200 bg-blue-50">
+                        <p class="text-[9px] font-black text-blue-500 uppercase">Result (St+1)</p>
+                        <p id="val-next" class="code-font text-[10px] text-blue-700 font-bold mt-1">None</p>
+                    </div>
+                </div>
+
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Notebook State</h3>
+                <div id="state-container" class="bg-white border-2 border-slate-200 rounded-2xl p-4 flex-grow shadow-inner min-h-[120px]">
+                    <div id="state-list" class="flex flex-col">
+                        <p class="text-slate-300 italic text-xs text-center mt-4">Empty...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 p-6 bg-white flex flex-col gap-4">
+                <div>
+                    <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Manage State Updates</h3>
+                    <div class="space-y-2">
+                        <div id="ref-overwrite" class="method-row p-2 rounded-r-lg border border-slate-100">
+                            <p class="text-xs font-bold text-slate-800">1. Default (Overwrite)</p>
+                            <p class="text-[9px] text-slate-500 italic mb-1">Logic: f(S, U) = U</p>
+                            <p class="text-[9px] text-blue-600 font-medium">Use: Status flags, current steps.</p>
+                        </div>
+                        <div id="ref-reducer" class="method-row p-2 rounded-r-lg border border-slate-100">
+                            <p class="text-xs font-bold text-slate-800">2. Built-in Add</p>
+                            <p class="text-[9px] text-slate-500 italic mb-1">Logic: f(S, U) = S + U</p>
+                            <p class="text-[9px] text-blue-600 font-medium">Use: Chat history, logs.</p>
+                        </div>
+                        <div id="ref-custom" class="method-row p-2 rounded-r-lg border border-slate-100">
+                            <p class="text-xs font-bold text-slate-800">3. Custom Reducer</p>
+                            <p class="text-[9px] text-slate-500 italic mb-1">Logic: f(S, U) = Custom</p>
+                            <p class="text-[9px] text-blue-600 font-medium">Use: Deduplication, merging.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100">
+                    <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Python State Definition</h3>
+                    <div id="code-box" class="code-font text-[9px] p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg whitespace-pre">
+                        analysis: list[str]
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-50 p-6 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="flex flex-col gap-1">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-tighter italic">Expert LLM Strategy</h4>
+                <p class="text-[10px] text-slate-600 leading-tight mb-2">
+                    1. <strong>Identities:</strong> Even with one model, nodes utilize <b>distinct system prompts</b>:
+                </p>
+                <ul class="text-[9px] text-slate-500 space-y-1 ml-2">
+                    <li>• <strong>A:</strong> "<b>You are a Senior Debugger</b>. Focus only on logic and runtime errors."</li>
+                    <li>• <strong>B:</strong> "<b>You are a Linter.</b> Focus only on PEP8 style and naming conventions."</li>
+                    <li>• <strong>C:</strong> "<b>You are a Security Auditor.</b> Focus only on security vulnerabilities."</li>
+                </ul>
+            </div>
+            <div class="flex flex-col gap-1">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-tighter italic">Operational Note</h4>
+                <p class="text-[10px] text-slate-600 leading-tight">
+                    2. <strong>Concurrency:</strong> Nodes execute in parallel. The Reducer acts as the synchronization point, ensuring that updates from $A$, $B$, and $C$ are merged into the global state without collisions.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mode = 'overwrite';
+        let step = 0;
+        const experts = ['n-1', 'n-2', 'n-3'];
+        const results = [
+            "Bug Finder: Found 2 Bugs",
+            "Syntax Checker: Found 2 Bugs",
+            "Security Auditor: Logic Risk"
+        ];
+
+        function setMode(m) {
+            mode = m;
+            reset();
+            document.getElementById('tab-overwrite').classList.toggle('active', m === 'overwrite');
+            document.getElementById('tab-reducer').classList.toggle('active', m === 'reducer');
+            document.getElementById('tab-custom').classList.toggle('active', m === 'custom');
+            document.getElementById('ref-overwrite').classList.toggle('method-active', m === 'overwrite');
+            document.getElementById('ref-reducer').classList.toggle('method-active', m === 'reducer');
+            document.getElementById('ref-custom').classList.toggle('method-active', m === 'custom');
+
+            const codeBox = document.getElementById('code-box');
+            if (m === 'overwrite') {
+                codeBox.innerHTML = 'analysis: <span class="text-slate-500 font-bold">list[str]</span>';
+            } else if (m === 'reducer') {
+                codeBox.innerHTML = 'analysis: <span class="text-blue-600 font-bold">Annotated[list[str], add]</span>';
+            } else {
+                codeBox.innerHTML = 'def dedupe(old, new):\n  return list(set(old + new))\n\nanalysis: <span class="text-purple-600 font-bold">Annotated[list, dedupe]</span>';
+            }
+        }
+
+        function reset() {
+            step = 0;
+            document.querySelectorAll('.node').forEach(n => n.className = 'node p-3 rounded-xl w-36 text-center font-bold text-slate-700 shadow-sm text-xs');
+            experts.forEach(e => document.getElementById(e).className = 'node p-2 rounded-lg w-24 text-center text-[9px] font-bold shadow-sm h-14 flex items-center justify-center');
+            document.getElementById('state-list').innerHTML = '<p class="text-slate-300 italic text-xs text-center mt-4">Empty...</p>';
+            document.getElementById('step-btn').innerText = 'START SIMULATION';
+            document.getElementById('step-btn').className = "flex-1 bg-blue-600 text-white py-3 rounded-xl font-black shadow-lg hover:bg-blue-700 transition active:scale-95 text-xs uppercase";
+            document.getElementById('instruction-box').className = "mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100";
+            document.getElementById('val-s').innerText = "None";
+            document.getElementById('val-u').innerText = "None";
+            document.getElementById('val-next').innerText = "None";
+            document.getElementById('var-s').classList.remove('variable-active');
+            document.getElementById('var-u').classList.remove('variable-active');
+            document.getElementById('step-title').innerText = "Tutorial Start";
+            document.getElementById('instruction').innerText = "Ready to begin the critique?";
+        }
+
+        function nextStep() {
+            const stateList = document.getElementById('state-list');
+            const inst = document.getElementById('instruction');
+            const title = document.getElementById('step-title');
+            const btn = document.getElementById('step-btn');
+
+            if (step === 0) {
+                document.getElementById('n-fan').classList.add('active');
+                title.innerText = "Phase 1: Map";
+                inst.innerText = "Parallel analysis begins.";
+                btn.innerText = "COLLECT FINDINGS";
+                step++;
+            }
+            else if (step === 1) {
+                document.getElementById('n-fan').classList.replace('active', 'completed');
+                experts.forEach(e => document.getElementById(e).classList.add('active'));
+                title.innerText = "Phase 2: Updates (U)";
+                inst.innerText = "Experts finished. Note the duplicate bug findings.";
+                document.getElementById('var-u').classList.add('variable-active');
+                document.getElementById('val-u').innerText = JSON.stringify(results);
+                btn.innerText = "MERGE INTO STATE (S)";
+                step++;
+            }
+            else if (step === 2) {
+                experts.forEach(e => document.getElementById(e).classList.replace('active', 'completed'));
+                stateList.innerHTML = '';
+                document.getElementById('var-s').classList.add('variable-active');
+
+                if (mode === 'overwrite') {
+                    title.innerText = "Logic: f(S, U) = U";
+                    inst.innerText = "Only the last expert's report survived.";
+                    document.getElementById('val-s').innerText = "None";
+                    document.getElementById('val-next').innerText = '["' + results[2] + '"]';
+                    stateList.innerHTML = `<div class="state-item bg-amber-50 text-amber-700 border-amber-100">${results[2]}</div>`;
+                    document.getElementById('instruction-box').className = "mb-6 bg-rose-50 p-4 rounded-xl border border-rose-100";
+                    btn.innerText = "HOW TO FIX?";
+                } else if (mode === 'reducer') {
+                    title.innerText = "Logic: f(S, U) = S + U";
+                    inst.innerText = "All findings kept, but includes duplicates.";
+                    document.getElementById('val-s').innerText = "[]";
+                    document.getElementById('val-next').innerText = JSON.stringify(results);
+                    results.forEach(res => {
+                        const item = document.createElement('div');
+                        item.className = `state-item bg-blue-50 text-blue-700 border-blue-100`;
+                        item.innerText = res;
+                        stateList.appendChild(item);
+                    });
+                    document.getElementById('instruction-box').className = "mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100";
+                    btn.innerText = "TRY CUSTOM DEDUPE?";
+                } else {
+                    title.innerText = "Custom Logic: Dedupe";
+                    inst.innerText = "The custom reducer merged lists and removed duplicates.";
+                    document.getElementById('val-s').innerText = "[]";
+                    const deduped = [...new Set(results)];
+                    document.getElementById('val-next').innerText = JSON.stringify(deduped);
+                    deduped.forEach(res => {
+                        const item = document.createElement('div');
+                        item.className = `state-item bg-emerald-50 text-emerald-700 border-emerald-100`;
+                        item.innerText = res;
+                        stateList.appendChild(item);
+                    });
+                    document.getElementById('instruction-box').className = "mb-6 bg-emerald-50 p-4 rounded-xl border border-emerald-100";
+                    btn.innerText = "FINISH ANALYSIS";
+                }
+                step++;
+            }
+            else if (step === 3) {
+                if (mode === 'overwrite') {
+                    setMode('reducer');
+                } else if (mode === 'reducer') {
+                    setMode('custom');
+                } else {
+                    document.getElementById('n-join').classList.add('active');
+                    title.innerText = "Phase 3: Complete";
+                    inst.innerText = "Final Report contains only unique findings.";
+                    btn.innerText = "SIMULATION FINISHED";
+                    step++;
+                }
+            }
+        }
+        setMode('overwrite');
+    </script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph Map-Reduce Pattern</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .node { transition: all 0.3s ease; border: 2px solid #cbd5e1; background: #ffffff; position: relative; }
+        .node.active { border-color: #3b82f6; background-color: #eff6ff; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); transform: translateY(-2px); }
+        .node.completed { border-color: #10b981; background-color: #ecfdf5; opacity: 0.8; }
+
+        .code-font { font-family: 'Courier New', Courier, monospace; }
+
+        .map-line { stroke: #cbd5e1; stroke-width: 2; fill: none; transition: stroke 0.5s; }
+        .line-active { stroke: #3b82f6; stroke-dasharray: 5; animation: dash 2s linear infinite; }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -20; }
+        }
+
+        .log-entry {
+            animation: slide-in 0.4s ease-out forwards;
+            border-left: 3px solid #3b82f6;
+        }
+        @keyframes slide-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+
+    <div class="max-w-7xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
+
+        <div class="bg-slate-100 p-6 border-b border-slate-200">
+
+            <h1 class="text-2xl font-bold text-slate-800 mb-2">Map-Reduce</h1>
+            <p class="text-slate-600 text-sm leading-relaxed max-w-4xl">
+                When a document is too large for a context window, we <strong>Map</strong> it into chunks to process in parallel using the <b>Send</b> API, then <strong>Reduce</strong> the results.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 min-h-[500px]">
+
+            <div class="lg:col-span-3 p-8 border-r border-slate-100 bg-slate-50/30 flex flex-col">
+                <div id="status-box" class="mb-6 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 id="step-name" class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Status</h3>
+                    <p id="step-desc" class="text-sm text-slate-700 font-medium leading-relaxed">Ready to bypass context limits.</p>
+                </div>
+
+                <div class="space-y-4 mb-8">
+                    <button id="main-btn" onclick="runPipeline()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-lg hover:bg-blue-700 transition active:scale-95 text-xs uppercase tracking-widest">
+                        Initialize
+                    </button>
+                    <button onclick="resetPipeline()" class="w-full bg-white text-slate-500 py-3 rounded-xl font-bold hover:bg-slate-100 border border-slate-200 text-xs transition">
+                        RESET
+                    </button>
+                </div>
+
+                <div class="flex-grow overflow-hidden flex flex-col">
+                    <h4 class="text-[10px] font-black text-slate-400 uppercase mb-3">State: summary_list</h4>
+                    <div id="log-container" class="bg-white border border-slate-200 rounded-xl p-4 flex-grow overflow-y-auto space-y-3 shadow-inner">
+                        <p id="log-empty" class="text-slate-300 italic text-[10px] text-center mt-4">Buffer Empty</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-9 p-12 relative flex items-center justify-center bg-white">
+                <div class="flex items-center justify-between w-full max-w-3xl relative z-10">
+
+                    <div id="node-input" class="node p-5 rounded-2xl w-36 text-center shadow-md">
+                        <div class="text-[10px] font-black text-slate-400 uppercase mb-1">Input</div>
+                        <div class="text-xs font-bold text-slate-800">Long Doc</div>
+                        <div class="text-[9px] text-slate-500 mt-1 italic">10k Tokens</div>
+                    </div>
+
+                    <div class="flex flex-col gap-8">
+                        <div id="node-map-1" class="node p-4 rounded-xl w-40 text-center shadow-sm">
+                            <div class="text-[9px] font-black text-blue-500 uppercase">Map Chunk 1</div>
+                            <div id="text-1" class="text-[10px] font-medium text-slate-500 italic mt-1 opacity-0 transition-opacity">Summarizing...</div>
+                        </div>
+                        <div id="node-map-2" class="node p-4 rounded-xl w-40 text-center shadow-sm">
+                            <div class="text-[9px] font-black text-blue-500 uppercase">Map Chunk 2</div>
+                            <div id="text-2" class="text-[10px] font-medium text-slate-500 italic mt-1 opacity-0 transition-opacity">Summarizing...</div>
+                        </div>
+                        <div id="node-map-3" class="node p-4 rounded-xl w-40 text-center shadow-sm">
+                            <div class="text-[9px] font-black text-blue-500 uppercase">Map Chunk 3</div>
+                            <div id="text-3" class="text-[10px] font-medium text-slate-500 italic mt-1 opacity-0 transition-opacity">Summarizing...</div>
+                        </div>
+                    </div>
+
+                    <div id="node-reduce" class="node p-5 rounded-2xl w-36 text-center shadow-md">
+                        <div class="text-[10px] font-black text-purple-500 uppercase mb-1">Reduce</div>
+                        <div class="text-xs font-bold text-slate-800">Final Summary</div>
+                    </div>
+
+                </div>
+
+                <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 0;">
+                    <path id="path1" class="map-line" d="M 230 250 L 415 155" />
+                    <path id="path2" class="map-line" d="M 230 250 L 415 250" />
+                    <path id="path3" class="map-line" d="M 230 250 L 415 345" />
+                    <path id="path4" class="map-line" d="M 575 155 L 755 250" />
+                    <path id="path5" class="map-line" d="M 575 250 L 755 250" />
+                    <path id="path6" class="map-line" d="M 575 345 L 755 250" />
+                </svg>
+            </div>
+        </div>
+
+        <div class="bg-slate-100 p-6 border-t border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <h4 class="text-[10px] font-black text-slate-500 uppercase mb-2">1. The State (Reducer)</h4>
+                <div class="bg-white rounded-lg p-3 border border-slate-200 code-font text-[9px] leading-relaxed shadow-sm">
+                    <span class="text-blue-600 font-bold">class</span> OverallState(TypedDict):<br>
+                    &nbsp;&nbsp;contents: <span class="text-emerald-700 font-bold">Annotated[list, add]</span>
+                </div>
+            </div>
+            <div>
+                <h4 class="text-[10px] font-black text-slate-500 uppercase mb-2">2. Mapping (The Send API)</h4>
+                <div class="bg-white rounded-lg p-3 border border-slate-200 code-font text-[9px] leading-relaxed shadow-sm">
+                    <span class="text-blue-600 font-bold">def</span> map_nodes(state):<br>
+                    &nbsp;&nbsp;<span class="text-blue-600">return</span> [Send(<span class="text-amber-600">"summarizer"</span>, c)<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-blue-600">for</span> c <span class="text-blue-600">in</span> state[<span class="text-amber-600">"chunks"</span>]]
+                </div>
+            </div>
+            <div>
+                <h4 class="text-[10px] font-black text-slate-500 uppercase mb-2">3. Reducing (Synthesis)</h4>
+                <div class="bg-white rounded-lg p-3 border border-slate-200 code-font text-[9px] leading-relaxed shadow-sm">
+                    <span class="text-blue-600 font-bold">def</span> generate_summary(state):<br>
+                    &nbsp;&nbsp;combined = <span class="text-amber-600">"\n"</span>.join(state[<span class="text-amber-600">"contents"</span>])<br>
+                    &nbsp;&nbsp;<span class="text-blue-600">return</span> {<span class="text-amber-600">"final"</span>: llm.invoke(combined)}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pipelineStep = 0;
+        const chunks = [
+            "Summary 1: LangGraph maintains state across multi-agent loops.",
+            "Summary 2: Cyclic edges allow for recursive reasoning.",
+            "Summary 3: Reducers define how parallel updates are merged."
+        ];
+
+        function addLog(text, isFinal = false) {
+            const container = document.getElementById('log-container');
+            const empty = document.getElementById('log-empty');
+            if (empty) empty.remove();
+            const entry = document.createElement('div');
+            entry.className = `log-entry p-2 rounded bg-white border border-slate-100 shadow-sm text-[9px] font-medium leading-tight ${isFinal ? 'border-purple-200 bg-purple-50 text-purple-800' : 'text-slate-600'}`;
+            entry.innerText = text;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function runPipeline() {
+            const btn = document.getElementById('main-btn');
+            const status = document.getElementById('step-name');
+            const desc = document.getElementById('step-desc');
+
+            if (pipelineStep === 0) {
+                document.getElementById('node-input').classList.add('active');
+                document.getElementById('path1').classList.add('line-active');
+                document.getElementById('path2').classList.add('line-active');
+                document.getElementById('path3').classList.add('line-active');
+                status.innerText = "Splitting Data";
+                desc.innerText = "Document partitioned into logical chunks.";
+                btn.innerText = "DISPATCH MAP NODES";
+                pipelineStep++;
+            }
+            else if (pipelineStep === 1) {
+                document.getElementById('node-input').classList.replace('active', 'completed');
+                document.getElementById('node-map-1').classList.add('active');
+                document.getElementById('node-map-2').classList.add('active');
+                document.getElementById('node-map-3').classList.add('active');
+                document.getElementById('text-1').classList.replace('opacity-0', 'opacity-100');
+                document.getElementById('text-2').classList.replace('opacity-0', 'opacity-100');
+                document.getElementById('text-3').classList.replace('opacity-0', 'opacity-100');
+                status.innerText = "Map Phase";
+                desc.innerText = "Executing parallel LLM summaries via Send API.";
+                setTimeout(() => addLog(chunks[0]), 300);
+                setTimeout(() => addLog(chunks[1]), 600);
+                setTimeout(() => addLog(chunks[2]), 900);
+                btn.innerText = "COLLAPSE & REDUCE";
+                pipelineStep++;
+            }
+            else if (pipelineStep === 2) {
+                document.querySelectorAll('.node').forEach(n => n.classList.contains('active') && n.classList.replace('active', 'completed'));
+                document.getElementById('path4').classList.add('line-active');
+                document.getElementById('path5').classList.add('line-active');
+                document.getElementById('path6').classList.add('line-active');
+                document.getElementById('node-reduce').classList.add('active');
+                status.innerText = "Reduce Phase";
+                desc.innerText = "Synthesizing buffer into final result.";
+                setTimeout(() => addLog("FINAL: LangGraph uses parallel mapping and recursive reduction to handle massive contexts.", true), 500);
+                btn.innerText = "WORKFLOW COMPLETE";
+                pipelineStep++;
+            }
+        }
+
+        function resetPipeline() {
+            pipelineStep = 0;
+            document.querySelectorAll('.node').forEach(n => n.classList.remove('active', 'completed'));
+            document.querySelectorAll('.map-line').forEach(l => l.classList.remove('line-active'));
+            document.getElementById('text-1').classList.add('opacity-0');
+            document.getElementById('text-2').classList.add('opacity-0');
+            document.getElementById('text-3').classList.add('opacity-0');
+            document.getElementById('log-container').innerHTML = '<p id="log-empty" class="text-slate-300 italic text-[10px] text-center mt-4">Buffer Empty</p>';
+            document.getElementById('step-name').innerText = "Status";
+            document.getElementById('step-desc').innerText = "Ready to bypass context limits.";
+            document.getElementById('main-btn').innerText = "Initialize";
+        }
+    </script>
+</body>
+</html>
