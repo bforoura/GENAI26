@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU vs GPU Parallelism</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        .core { transition: all 0.3s ease; border: 1px solid rgba(255,255,255,0.1); }
+        .core-active { transform: scale(1.1); filter: brightness(1.3); box-shadow: 0 0 15px currentColor; }
+        
+        @keyframes processing {
+            0% { opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+        .animate-proc { animation: processing 0.5s infinite; }
+        .gpu-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-6 min-h-screen flex items-center justify-center font-sans">
+
+    <div class="max-w-6xl w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+        
+        <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-white">
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">Parallelism Architecture</h1>
+                <p class="text-sm text-slate-500 font-medium uppercase">Task Latency vs. Data Throughput</p>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="startSimulation('cpu')" class="px-4 py-2 bg-blue-600 text-white text-[10px] font-black rounded-lg hover:bg-blue-700 uppercase tracking-widest">Simulate CPU</button>
+                <button onclick="startSimulation('gpu')" class="px-4 py-2 bg-emerald-600 text-white text-[10px] font-black rounded-lg hover:bg-emerald-700 uppercase tracking-widest">Simulate GPU</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-0">
+            
+            <div class="p-10 border-r border-slate-100">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 font-bold">CPU</div>
+                    <div>
+                        <h2 class="font-black text-slate-800 uppercase text-sm">Serial Processor</h2>
+                        <p class="text-[10px] text-slate-400 font-bold italic">"Do one complex thing very fast"</p>
+                    </div>
+                </div>
+
+                <div class="h-48 flex items-center justify-center gap-4 bg-slate-900 rounded-2xl p-6 mb-6">
+                    <div id="cpu-core-0" class="w-16 h-16 bg-blue-500 rounded-lg core flex items-center justify-center text-[10px] font-black text-white">CORE 0</div>
+                    <div id="cpu-core-1" class="w-16 h-16 bg-blue-500 rounded-lg core flex items-center justify-center text-[10px] font-black text-white">CORE 1</div>
+                    <div id="cpu-core-2" class="w-16 h-16 bg-blue-400/20 rounded-lg border border-blue-500/30"></div>
+                    <div id="cpu-core-3" class="w-16 h-16 bg-blue-400/20 rounded-lg border border-blue-500/30"></div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-blue-500 font-bold mt-1">→</span>
+                        <p class="text-xs text-slate-600 leading-relaxed"><strong>Latency Optimized:</strong> Built with massive caches and complex branch prediction to finish individual tasks quickly.</p>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="text-blue-500 font-bold mt-1">→</span>
+                        <p class="text-xs text-slate-600 leading-relaxed"><strong>MIMD:</strong> (Multiple Instruction, Multiple Data). Each core can do something totally different (e.g., Core 0 handles WiFi, Core 1 handles Chrome).</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-10">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold">GPU</div>
+                    <div>
+                        <h2 class="font-black text-slate-800 uppercase text-sm">Parallel Processor</h2>
+                        <p class="text-[10px] text-slate-400 font-bold italic">"Do thousands of simple things at once"</p>
+                    </div>
+                </div>
+
+                <div class="h-48 bg-slate-900 rounded-2xl p-4 mb-6">
+                    <div class="gpu-grid h-full" id="gpu-container">
+                        </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-500 font-bold mt-1">→</span>
+                        <p class="text-xs text-slate-600 leading-relaxed"><strong>Throughput Optimized:</strong> Sacrifices complex logic for massive volume. Ideal for the matrix multiplication inside LLMs.</p>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <span class="text-emerald-500 font-bold mt-1">→</span>
+                        <p class="text-xs text-slate-600 leading-relaxed"><strong>SIMD:</strong> (Single Instruction, Multiple Data). Thousands of cores do the *exact* same math on different chunks of the model weights.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-2 text-center">
+            <div>
+                <span class="block text-[10px] font-black text-slate-400 uppercase">Best For</span>
+                <span class="text-sm font-bold text-blue-700">OS, System Logic, I/O</span>
+            </div>
+            <div class="border-l border-slate-200">
+                <span class="block text-[10px] font-black text-slate-400 uppercase">Best For</span>
+                <span class="text-sm font-bold text-emerald-700">Matrix Math, Video, AI</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate GPU Cores
+        const gpuContainer = document.getElementById('gpu-container');
+        for(let i=0; i < 144; i++) {
+            const core = document.createElement('div');
+            core.className = 'w-full aspect-square bg-emerald-900/40 rounded-[1px] core gpu-core';
+            core.id = `gpu-core-${i}`;
+            gpuContainer.appendChild(core);
+        }
+
+        function startSimulation(type) {
+            // Reset
+            document.querySelectorAll('.core').forEach(c => c.classList.remove('core-active', 'animate-proc', 'bg-emerald-400', 'bg-blue-400'));
+            
+            if(type === 'cpu') {
+                const cores = [0, 1];
+                cores.forEach(i => {
+                    const el = document.getElementById(`cpu-core-${i}`);
+                    el.classList.add('core-active', 'animate-proc');
+                });
+            } else {
+                const gpuCores = document.querySelectorAll('.gpu-core');
+                gpuCores.forEach((core, i) => {
+                    setTimeout(() => {
+                        core.classList.add('bg-emerald-400', 'core-active', 'animate-proc');
+                    }, i * 2);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

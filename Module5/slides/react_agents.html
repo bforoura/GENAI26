@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReAct Agent Interactive Slide</title>
+    <style>
+        :root {
+            --bg: #f4f7f6;
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --thought-bg: #fff9c4;
+            --action-bg: #e1f5fe;
+            --obs-bg: #e8f5e9;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .slide-container {
+            width: 80%;
+            max-width: 900px;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 { margin-bottom: 10px; }
+        p.subtitle { color: #666; margin-bottom: 30px; }
+
+        .react-loop {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-top: 40px;
+            position: relative;
+        }
+
+        .step {
+            width: 180px;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            opacity: 0.3;
+            transform: scale(0.9);
+        }
+
+        .step.active {
+            opacity: 1;
+            transform: scale(1.1);
+            border-color: var(--accent);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .thought { background-color: var(--thought-bg); }
+        .action { background-color: var(--action-bg); }
+        .observation { background-color: var(--obs-bg); }
+
+        .controls {
+            margin-top: 50px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #2980b9; }
+
+        .description-box {
+            margin-top: 30px;
+            min-height: 80px;
+            font-style: italic;
+            color: #444;
+            padding: 15px;
+            border-left: 4px solid var(--accent);
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+<div class="slide-container">
+    <h1>ReAct: Reasoning + Acting</h1>
+    <p class="subtitle">How Agentic AI solves complex problems in a loop</p>
+
+    <div class="react-loop">
+        <div id="step-0" class="step thought">
+            <strong>1. Thought</strong>
+            <p>Reasoning about the current state.</p>
+        </div>
+        <div id="step-1" class="step action">
+            <strong>2. Action</strong>
+            <p>Interacting with a tool or API.</p>
+        </div>
+        <div id="step-2" class="step observation">
+            <strong>3. Observation</strong>
+            <p>Learning from the tool output.</p>
+        </div>
+    </div>
+
+    <div id="desc" class="description-box">
+        Click "Next Step" to see how an agent processes a task.
+    </div>
+
+    <div class="controls">
+        <button onclick="nextStep()">Next Step</button>
+        <button onclick="reset()" style="background:#95a5a6; margin-left:10px;">Reset</button>
+    </div>
+</div>
+
+<script>
+    let currentStep = -1;
+    const data = [
+        {
+            text: "<strong>Thought:</strong> The user wants to know the weather in Paris. I don't have real-time data, so I should use a weather tool.",
+            color: "#fbc02d"
+        },
+        {
+            text: "<strong>Action:</strong> Calling `get_weather(location='Paris')`...",
+            color: "#0288d1"
+        },
+        {
+            text: "<strong>Observation:</strong> Tool returned: 'Sunny, 22°C'. Now I can provide the final answer.",
+            color: "#388e3c"
+        }
+    ];
+
+    function nextStep() {
+        // Remove previous active classes
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        
+        currentStep = (currentStep + 1) % 3;
+        
+        const el = document.getElementById(`step-${currentStep}`);
+        const desc = document.getElementById('desc');
+        
+        el.classList.add('active');
+        desc.innerHTML = data[currentStep].text;
+    }
+
+    function reset() {
+        currentStep = -1;
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        document.getElementById('desc').innerHTML = "Click 'Next Step' to see how an agent processes a task.";
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph: ReAct State Machine</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --node-bg: #334155;
+            --highlight: #fbbf24;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: var(--accent); margin: 0; }
+
+        .graph-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        /* The Visual Graph */
+        .visual-flow {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+
+        .node {
+            padding: 15px;
+            background: var(--node-bg);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            text-align: center;
+            transition: 0.3s;
+            position: relative;
+        }
+
+        .node.active {
+            border-color: var(--highlight);
+            box-shadow: 0 0 15px var(--highlight);
+            transform: scale(1.05);
+        }
+
+        /* The State Monitor */
+        .state-monitor {
+            flex: 1;
+            background: #000;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            border: 1px solid #334155;
+        }
+
+        .state-key { color: var(--accent); }
+        .state-val { color: #10b981; }
+
+        .controls {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: var(--accent);
+            color: #0f172a;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover { opacity: 0.9; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>LangGraph: ReAct State Loop</h1>
+        <p>In LangGraph, the agent is a <strong>State Machine</strong>.</p>
+    </div>
+
+    <div class="graph-area">
+        <div class="visual-flow">
+            <div id="node-0" class="node"><strong>Node: Planner</strong><br><small>Decides next step</small></div>
+            <div id="node-1" class="node"><strong>Node: Executor</strong><br><small>Calls external tools</small></div>
+            <div id="node-2" class="node"><strong>Node: Formatter</strong><br><small>Finalizes answer</small></div>
+        </div>
+
+        <div class="state-monitor">
+            <h4 style="margin-top:0; color: #94a3b8;">Shared Graph State:</h4>
+            <div id="state-json">
+                {<br>
+                &nbsp;&nbsp;<span class="state-key">"input"</span>: <span class="state-val">"Who won the Super Bowl 2026?"</span>,<br>
+                &nbsp;&nbsp;<span class="state-key">"plan"</span>: <span class="state-val">[]</span>,<br>
+                &nbsp;&nbsp;<span class="state-key">"tool_results"</span>: <span class="state-val">[]</span>,<br>
+                &nbsp;&nbsp;<span class="state-key">"steps_taken"</span>: <span class="state-val">0</span><br>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="runNextNode()">Run Next Node</button>
+        <button onclick="resetGraph()" style="background:#475569; margin-left:10px; color:white;">Reset</button>
+    </div>
+</div>
+
+<script>
+    let step = 0;
+    const states = [
+        {
+            node: 0,
+            json: `{<br>&nbsp;&nbsp;<span class="state-key">"input"</span>: "Who won the Super Bowl 2026?",<br>&nbsp;&nbsp;<span class="state-key">"plan"</span>: <span class="state-val">["Search Google", "Verify Date"]</span>,<br>&nbsp;&nbsp;<span class="state-key">"tool_results"</span>: [],<br>&nbsp;&nbsp;<span class="state-key">"steps_taken"</span>: 1<br>}`
+        },
+        {
+            node: 1,
+            json: `{<br>&nbsp;&nbsp;<span class="state-key">"input"</span>: "Who won the Super Bowl 2026?",<br>&nbsp;&nbsp;<span class="state-key">"plan"</span>: ["Search Google", "Verify Date"],<br>&nbsp;&nbsp;<span class="state-key">"tool_results"</span>: <span class="state-val">["Eagles won 24-21"]</span>,<br>&nbsp;&nbsp;<span class="state-key">"steps_taken"</span>: 2<br>}`
+        },
+        {
+            node: 2,
+            json: `{<br>&nbsp;&nbsp;<span class="state-key">"input"</span>: "Who won the Super Bowl 2026?",<br>&nbsp;&nbsp;<span class="state-key">"plan"</span>: [],<br>&nbsp;&nbsp;<span class="state-key">"final_answer"</span>: <span class="state-val">"The Eagles won Super Bowl LX!"</span>,<br>&nbsp;&nbsp;<span class="state-key">"steps_taken"</span>: 3<br>}`
+        }
+    ];
+
+    function runNextNode() {
+        if (step >= states.length) return;
+        
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+        
+        const current = states[step];
+        document.getElementById(`node-${current.node}`).classList.add('active');
+        document.getElementById('state-json').innerHTML = current.json;
+        
+        step++;
+    }
+
+    function resetGraph() {
+        step = 0;
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+        document.getElementById('state-json').innerHTML = `{<br>&nbsp;&nbsp;<span class="state-key">"input"</span>: <span class="state-val">"Who won the Super Bowl 2026?"</span>,<br>&nbsp;&nbsp;<span class="state-key">"plan"</span>: <span class="state-val">[]</span>,<br>&nbsp;&nbsp;<span class="state-key">"tool_results"</span>: <span class="state-val">[]</span>,<br>&nbsp;&nbsp;<span class="state-key">"steps_taken"</span>: <span class="state-val">0</span><br>}`;
+    }
+</script>
+
+</body>
+</html>

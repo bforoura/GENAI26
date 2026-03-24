@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph: Full State Flow</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --primary: #0f172a;
+            --graph-purple: #7c3aed;
+            --tool-blue: #0ea5e9;
+            --code-bg: #1e293b;
+            --border: #e2e8f0;
+            --state-label: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .slide-deck {
+            width: 98vw;
+            max-width: 1400px;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: 450px 1fr;
+            gap: 30px;
+        }
+
+        .graph-container {
+            position: relative;
+            height: 520px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .node {
+            position: absolute;
+            padding: 8px 12px;
+            background: white;
+            border: 2px solid #64748b;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            transition: 0.4s;
+            z-index: 10;
+            text-align: center;
+        }
+
+        #n-start { top: 20px; left: 175px; }
+        #n-planner { top: 90px; left: 165px; border-color: #f59e0b; }
+        #n-t1 { top: 200px; left: 30px; border-color: var(--tool-blue); width: 90px; }
+        #n-t2 { top: 200px; left: 170px; border-color: var(--tool-blue); width: 90px; }
+        #n-t3 { top: 200px; left: 310px; border-color: var(--tool-blue); width: 90px; }
+        #n-synth { top: 340px; left: 155px; border-color: var(--graph-purple); padding: 12px 20px; }
+        #n-end { top: 450px; left: 185px; border-color: #10b981; }
+
+        .active-node { background: var(--graph-purple); color: white; border-color: var(--graph-purple); transform: scale(1.05); }
+        .active-planner { background: #f59e0b; color: white; border-color: #d97706; }
+        .active-tool { background: var(--tool-blue); color: white; border-color: var(--tool-blue); transform: scale(1.1); }
+
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .edge { stroke: #cbd5e1; stroke-width: 2; fill: none; }
+        .edge-active { stroke: #f59e0b; stroke-width: 3; }
+        .edge-tool { stroke: var(--tool-blue); stroke-width: 3; }
+
+        .content-panel { display: flex; flex-direction: column; gap: 20px; }
+        .feature-card { background: #f1f5f9; padding: 15px; border-radius: 10px; border-left: 8px solid #7c3aed; }
+        .code-block { background: var(--code-bg); color: #e2e8f0; padding: 20px; border-radius: 10px; font-family: 'Fira Code', monospace; font-size: 11px; height: 380px; overflow-y: auto; line-height: 1.4; }
+
+        .kw { color: #f472b6; }
+        .fn { color: #38bdf8; }
+        .cm { color: #94a3b8; }
+        .st { color: #a5f3fc; }
+        .sk { color: var(--state-label); font-weight: bold; }
+        .tp { color: #fbbf24; }
+
+        .controls { grid-column: span 2; text-align: center; padding-top: 20px; border-top: 1px solid var(--border); }
+        button { padding: 12px 30px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; background: var(--primary); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="slide-deck">
+    <div class="viz-panel">
+        <div class="graph-container">
+            <svg>
+                <path id="e1" class="edge" d="M210 50 L210 90" />
+                <path id="e-f1" class="edge" d="M210 130 L80 200" />
+                <path id="e-f2" class="edge" d="M210 130 L215 200" />
+                <path id="e-f3" class="edge" d="M210 130 L350 200" />
+                <path id="e-i1" class="edge" d="M80 240 L210 340" />
+                <path id="e-i2" class="edge" d="M215 240 L210 340" />
+                <path id="e-i3" class="edge" d="M350 240 L210 340" />
+                <path id="e-end" class="edge" d="M210 385 L210 450" />
+            </svg>
+            <div id="n-start" class="node">START</div>
+            <div id="n-planner" class="node">PLANNER (LLM)</div>
+            <div id="n-t1" class="node">Wikipedia</div>
+            <div id="n-t2" class="node">Search</div>
+            <div id="n-t3" class="node">Weather API</div>
+            <div id="n-synth" class="node">SYNTHESIZER</div>
+            <div id="n-end" class="node">OUTPUT</div>
+        </div>
+    </div>
+
+    <div class="content-panel">
+        <div class="feature-card" id="info-card">
+            <h2 id="step-title" style="margin:0 0 5px 0;">Defining the State</h2>
+            <p id="step-desc">The key to parallelism is the Reducer, which prevents data from being overwritten.</p>
+        </div>
+        <div class="code-block">
+            <pre id="code-view">
+<span class="kw">import</span> operator
+<span class="kw">from</span> typing <span class="kw">import</span> Annotated, TypedDict
+
+<span class="kw">class</span> <span class="tp">GraphState</span>(TypedDict):
+    <span class="cm"># Original User Input is stored here</span>
+    user_query: str
+    <span class="cm"># Results APPEND instead of REPLACE</span>
+    results: Annotated[list[str], operator.add]
+    tool_queries: list[str]
+    final_answer: str</pre>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="next()">Execute Next Step</button>
+        <button style="background:#64748b; margin-left:10px;" onclick="location.reload()">Reset</button>
+    </div>
+</div>
+
+<script>
+    let step = 0;
+    const flow = [
+        {
+            title: "1. Planner Execution",
+            desc: "The Planner takes the user_query and fills 'tool_queries' in the state.",
+            code: "<span class='kw'>def</span> <span class='fn'>planner</span>(state: GraphState):\n    <span class='cm'># LLM reads state['user_query']</span>\n    <span class='kw'>return</span> {<span class='st'>\"tool_queries\"</span>: [<span class='st'>\"MetLife Stadium\"</span>, <span class='st'>\"2026 tickets\"</span>, <span class='st'>\"NJ weather\"</span>]}\n\n<span class='sk'># STATE SNAPSHOT:</span>\n{\n  <span class='st'>\"user_query\"</span>: <span class='st'>\"Details on the 2026 World Cup final venue\"</span>,\n  <span class='st'>\"tool_queries\"</span>: [<span class='st'>\"MetLife Stadium\"</span>, <span class='st'>\"2026 tickets\"</span>, <span class='st'>\"NJ weather\"</span>],\n  <span class='st'>\"results\"</span>: []\n}",
+            nodes: ["n-planner"],
+            edges: ["e1"],
+            type: "planner"
+        },
+        {
+            title: "2. Parallel Reducer Action",
+            desc: "Tools run based on 'tool_queries'. Reducers merge the outputs into 'results'.",
+            code: "<span class='cm'># Wikipedia.run(\"MetLife Stadium\")</span>\n<span class='cm'># Search.run(\"2026 tickets\")</span>\n<span class='cm'># Weather.run(\"NJ weather\")</span>\n\n<span class='sk'># STATE SNAPSHOT (Accumulated):</span>\n{\n  <span class='st'>\"user_query\"</span>: <span class='st'>\"Details on the 2026 World Cup final venue\"</span>,\n  <span class='st'>\"results\"</span>: [\n     <span class='st'>\"Wiki: MetLife Stadium is in NJ...\"</span>, \n     <span class='st'>\"Search: Tickets cost...\"</span>, \n     <span class='st'>\"Weather: Average July temp is 85F...\"</span>\n  ]\n}",
+            nodes: ["n-t1", "n-t2", "n-t3"],
+            edges: ["e-f1", "e-f2", "e-f3"],
+            type: "tool"
+        },
+        {
+            title: "3. Final Synthesis",
+            desc: "The Synthesizer joins the results list to create the final_answer.",
+            code: "<span class='kw'>def</span> <span class='fn'>synthesizer</span>(state: GraphState):\n    ctx = <span class='st'>\" \"</span>.join(state[<span class='st'>'results'</span>])\n    <span class='kw'>return</span> {<span class='st'>\"final_answer\"</span>: llm.<span class='fn'>invoke</span>(ctx)}\n\n<span class='sk'># FINAL STATE SNAPSHOT:</span>\n{\n  <span class='st'>\"user_query\"</span>: <span class='st'>\"Details on the 2026 World Cup final venue\"</span>,\n  <span class='st'>\"final_answer\"</span>: <span class='st'>\"The venue is MetLife Stadium...\"</span>\n}",
+            nodes: ["n-synth"],
+            edges: ["e-i1", "e-i2", "e-i3"],
+            type: "node"
+        }
+    ];
+
+    function next() {
+        if (step < flow.length) {
+            const s = flow[step];
+            document.getElementById('step-title').innerText = s.title;
+            document.getElementById('step-desc').innerText = s.desc;
+            document.getElementById('code-view').innerHTML = s.code;
+
+            document.querySelectorAll('.node').forEach(n => n.classList.remove('active-node', 'active-tool', 'active-planner'));
+            document.querySelectorAll('.edge').forEach(e => e.classList.remove('edge-active', 'edge-tool'));
+
+            s.nodes.forEach(id => {
+                let cls = 'active-node';
+                if(s.type === 'tool') cls = 'active-tool';
+                if(s.type === 'planner') cls = 'active-planner';
+                document.getElementById(id).classList.add(cls);
+            });
+            s.edges.forEach(id => {
+                document.getElementById(id).classList.add(s.type === 'tool' ? 'edge-tool' : 'edge-active');
+            });
+
+            step++;
+        }
+    }
+</script>
+
+</body>
+</html>

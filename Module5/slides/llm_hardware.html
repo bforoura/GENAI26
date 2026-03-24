@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Abstraction Stack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        .code-font { font-family: 'Fira Code', monospace; }
+        .token-kw { color: #2563eb; font-weight: 700; }
+        .token-fn { color: #7c3aed; }
+        .token-comment { color: #94a3b8; font-style: italic; }
+
+        .hw-card {
+            background: #ffffff;
+            border: 2px solid #f1f5f9;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .hw-card.active {
+            opacity: 1;
+            border-color: #3b82f6;
+            background: #f8fafc;
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1);
+        }
+
+        @keyframes flow-pulse {
+            0% { stroke-dashoffset: 20; stroke: #cbd5e1; }
+            100% { stroke-dashoffset: 0; stroke: #3b82f6; }
+        }
+        .connector { stroke: #e2e8f0; stroke-width: 2; fill: none; stroke-dasharray: 6; }
+        .connector-active { stroke-width: 3; animation: flow-pulse 0.8s linear infinite; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-6 min-h-screen flex items-center justify-center font-sans">
+
+    <div class="max-w-6xl w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+
+        <div class="p-6 bg-blue-600 text-white text-center border-b border-blue-700">
+            <span class="block text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Entry Point</span>
+            <h1 class="text-2xl font-black tracking-tight">OLLAMA APPLICATION</h1>
+            <p class="text-xs font-medium opacity-90 mt-1">Managing Model Loading & Request Lifecycle</p>
+        </div>
+
+        <div class="p-8 border-b border-slate-100 bg-slate-50/50">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded border border-blue-200 uppercase tracking-widest text-white">Logic Layer</span>
+                <h2 class="text-lg font-bold text-slate-900 tracking-tight">Transformer Attention (Self-Attention)</h2>
+            </div>
+            <div class="bg-white text-slate-700 p-6 rounded-2xl code-font text-xs border border-slate-200 shadow-sm leading-relaxed">
+                <p><span class="token-kw">import</span> torch.nn.functional <span class="token-kw">as</span> F</p>
+                <p><span class="token-comment"># Ollama dispatches this math to the backend...</span></p>
+                <p>attn = F.<span class="token-fn">softmax</span>((Q @ K.T) / scale, dim=-1) @ V</p>
+            </div>
+        </div>
+
+        <div class="p-10 text-center flex flex-col items-center">
+            <div class="z-10 w-64 bg-amber-50 border-2 border-amber-200 p-4 rounded-2xl mb-2">
+                <span class="block text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Virtual Translation Layer</span>
+                <div class="text-2xl font-black text-amber-800 tracking-tighter">VULKAN COMPUTE</div>
+            </div>
+
+            <svg width="800" height="80" viewBox="0 0 800 80" class="mb-4">
+                <path id="path-nvidia" class="connector" d="M 400 0 L 100 80" />
+                <path id="path-amd" class="connector" d="M 400 0 L 300 80" />
+                <path id="path-intel" class="connector" d="M 400 0 L 500 80" />
+                <path id="path-apple" class="connector" d="M 400 0 L 700 80" />
+            </svg>
+
+            <div class="grid grid-cols-4 gap-6 w-full z-10">
+                <div onclick="selectBackend('nvidia')" id="card-nvidia" class="hw-card p-5 rounded-2xl">
+                    <div class="text-xs font-black text-emerald-600 mb-1">CUDA</div>
+                    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">NVIDIA (PTX)</div>
+                </div>
+                <div onclick="selectBackend('amd')" id="card-amd" class="hw-card p-5 rounded-2xl">
+                    <div class="text-xs font-black text-rose-600 mb-1">ROCm</div>
+                    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">AMD (HIP)</div>
+                </div>
+                <div onclick="selectBackend('intel')" id="card-intel" class="hw-card p-5 rounded-2xl">
+                    <div class="text-xs font-black text-sky-600 mb-1">oneAPI</div>
+                    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">INTEL (Level Zero)</div>
+                </div>
+                <div onclick="selectBackend('apple')" id="card-apple" class="hw-card p-5 rounded-2xl">
+                    <div class="text-xs font-black text-purple-600 mb-1">METAL</div>
+                    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">APPLE (MPS)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-8 bg-slate-50 border-t border-slate-200 min-h-[250px]">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Target-Specific Binary Kernel</span>
+                </div>
+                <span id="runtime-label" class="text-[10px] font-black text-blue-600 uppercase border border-blue-200 px-3 py-1 rounded bg-white">Ready for Translation</span>
+            </div>
+            <div id="kernel-box" class="code-font text-[11px] leading-relaxed text-slate-700 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <pre id="kernel-code" class="text-slate-400">// Select a backend above to see the low-level translation</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const map = {
+            'nvidia': {
+                label: 'NVIDIA Runtime (cuBLAS / PTX)',
+                code: `__global__ void AttentionKernel(float* Q, float* K, float* Out) {\n  // Using CUDA Tensor Cores via WMMA hardware instructions\n  nvcuda::wmma::fragment<...> q_frag;\n  nvcuda::wmma::load_matrix_sync(q_frag, Q, 16);\n  __shared__ float smem[1024];\n  __syncthreads();\n}`
+            },
+            'amd': {
+                label: 'AMD Runtime (ROCm / HIP)',
+                code: `__global__ void attention_hip(float* Q, float* K, float* Out) {\n  // Optimized for AMD CDNA Matrix Cores (Radeon / Instinct)\n  int tid = hipThreadIdx_x;\n  // Using Local Data Share (LDS) for parallel reduction\n  __shared__ float lds_mem[2048];\n}`
+            },
+            'intel': {
+                label: 'Intel Runtime (oneAPI / SYCL)',
+                code: `void attention_sycl(queue& q, buffer<float>& Q, buffer<float>& Out) {\n  // Targeted for Intel Xe Matrix Extensions (XMX)\n  h.parallel_for(range<2>{16, 16}, [=](id<2> i) {\n    auto xmx_ops = intel::xmx::matrix_multiply(Q_frag, K_frag);\n  });\n}`
+            },
+            'apple': {
+                label: 'Apple Runtime (Metal / MPS Graph)',
+                code: `kernel void attention_mps(device const float* Q [[buffer(0)]],\n                         device float* Out [[buffer(1)]]) {\n  // Specialized for Apple Silicon AMX (Matrix) Engine\n  simdgroup_float8x8 q_mat, k_mat;\n  simdgroup_multiply_accumulate(q_mat, k_mat, v_mat);\n  // Direct access to Unified Memory L1 Cache\n}`
+            }
+        };
+
+        function selectBackend(id) {
+            document.querySelectorAll('.hw-card').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.connector').forEach(p => p.classList.remove('connector-active'));
+
+            document.getElementById(`card-${id}`).classList.add('active');
+            document.getElementById(`path-${id}`).classList.add('connector-active');
+
+            document.getElementById('runtime-label').innerText = map[id].label;
+            document.getElementById('kernel-code').innerText = map[id].code;
+            document.getElementById('kernel-code').className = "text-blue-700 transition-all duration-300";
+        }
+    </script>
+</body>
+</html>
