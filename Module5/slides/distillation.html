@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Distillation</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        :root {
+            --teacher-color: #0ea5e9;
+            --student-color: #f43f5e;
+            --bg-color: #ffffff;
+            --panel-bg: #f8fafc;
+            --text-dark: #0f172a;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --gradient-flash: rgba(244, 63, 94, 0.4);
+            --callout-bg: #fdf2f8; /* Soft color for top data note */
+            --callout-border: #f9a8d4;
+            --callout-text: #9d174d;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #f1f5f9;
+            color: var(--text-dark);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #slide-container {
+            width: 1100px;
+            background: var(--bg-color);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border);
+        }
+
+        .header {
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .formula-box {
+            background: var(--panel-bg);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            text-align: center;
+            margin-bottom: 15px;
+            border: 1px solid var(--border);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 30px;
+        }
+
+        .model-viz-column { display: flex; flex-direction: column; gap: 15px; }
+
+        .model-viz {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-end;
+            height: 180px;
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .stack { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+        .layer { height: 5px; border-radius: 1px; }
+        .t-layer { width: 80px; background: var(--teacher-color); opacity: 0.6; }
+        .s-layer { width: 50px; background: var(--student-color); opacity: 0.6; }
+        .stack-label { margin-top: 8px; font-weight: bold; font-size: 0.7rem; text-transform: uppercase; }
+
+        .weight-matrix-container {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        .matrix-label { font-size: 0.7rem; font-weight: bold; color: var(--text-light); margin-bottom: 8px; text-align: center; }
+        .weight-matrix {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            width: 100%;
+            height: 60px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .weight-cell { background-color: #cbd5e1; transition: background-color 0.15s; }
+        .bp-active { animation: bpFlash 0.6s ease-out; border-color: var(--student-color); }
+        @keyframes bpFlash { 0% { background: var(--gradient-flash); } 100% { background: var(--panel-bg); } }
+
+        .pdf-area {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .data-source-callout {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: var(--callout-bg);
+            border: 1px solid var(--callout-border);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            line-height: 1.3;
+            color: var(--callout-text);
+        }
+
+        .bar-container {
+            height: 180px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            border-bottom: 2px solid var(--text-dark);
+            margin-bottom: 10px;
+        }
+
+        .bar-group { display: flex; flex-direction: column; align-items: center; width: 90px; }
+        .bars { display: flex; align-items: flex-end; gap: 4px; }
+        .bar { width: 24px; border-radius: 3px 3px 0 0; transition: height 0.6s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
+        .bar.teacher { background: var(--teacher-color); }
+        .bar.student { background: var(--student-color); }
+        .token-name { font-size: 0.7rem; font-weight: bold; color: var(--text-light); margin-top: 5px; text-align: center; }
+
+        .footer-note {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #92400e;
+        }
+
+        .controls {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        button {
+            background: var(--text-dark);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover { background: #334155; }
+        .source-tag { font-size: 0.65rem; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+<div id="slide-container">
+    <div class="header">
+        <div>
+            <h2 style="margin:0">LLM Distillation: Gradient-Based Mimicry</h2>
+            <div style="font-size: 0.85rem; color: var(--text-light)">
+                Transfer Set Training Loop <span class="source-tag">Source: Wikipedia/OpenWebText</span>
+            </div>
+        </div>
+        <div class="metrics" style="font-family: monospace;">
+            Example: <span id="ex-num">1</span>/5 | \(D_{KL}\): <span id="kl-score" style="color:var(--student-color); font-weight:bold;">0.8942</span>
+        </div>
+    </div>
+
+    <div class="formula-box">
+        Loss Objective: \( \mathcal{L} = D_{KL}(P_{Teacher} \parallel Q_{Student}) = \sum P(x) \log \frac{P(x)}{Q(x)} \)
+    </div>
+
+    <div class="main-content">
+        <div class="model-viz-column">
+            <div class="model-viz">
+                <div class="stack"><div id="t-layers"></div><div class="stack-label" style="color:var(--teacher-color)">Teacher (50B)</div></div>
+                <div class="stack"><div id="s-layers"></div><div class="stack-label" style="color:var(--student-color)">Student (5B)</div></div>
+            </div>
+            <div class="weight-matrix-container" id="matrix-container">
+                <div class="matrix-label">STUDENT WEIGHT UPDATES (\(\Delta W\))</div>
+                <div class="weight-matrix" id="weight-matrix"></div>
+            </div>
+        </div>
+
+        <div class="pdf-area">
+            <div class="data-source-callout">
+                <strong>Data Source Logic:</strong> While you can use entirely new data, using the Teacher’s original training data ensures the Teacher is at its "peak performance" and provides the most stable, high-confidence probability distributions for the Student to learn from.
+            </div>
+            <div style="margin-bottom: 10px; font-size: 0.9rem;">
+                Active Transfer Prompt: <span id="prompt-text" style="font-weight:bold; color:var(--teacher-color)"></span>
+            </div>
+            <div class="bar-container" id="bar-chart"></div>
+        </div>
+    </div>
+
+    <div class="footer-note">
+        <strong>Methodology Note:</strong> For each prompt (Soft Label Generation), the Teacher generates "Soft Labels" (the blue distribution). The Student calculates the KL Divergence and uses <strong>Backpropagation (BP)</strong> to update its weights, forcing its PDF to match the Teacher’s complex logic.
+    </div>
+
+    <div class="controls">
+        <div style="font-size: 0.8rem; color: var(--text-light);">Click 'Train' to visualize the Gradient Update in the weights.</div>
+        <button id="action-btn" onclick="handleAction()">Train on Example</button>
+    </div>
+</div>
+
+<script>
+    const dataset = [
+        { prompt: '"The capital of France is..."', tokens: ["Paris", "Lyon", "Rome", "London"], dist: [0.92, 0.04, 0.03, 0.01] },
+        { prompt: '"A common red fruit is..."', tokens: ["Apple", "Cherry", "Carrot", "Blueberry"], dist: [0.75, 0.20, 0.03, 0.02] },
+        { prompt: '"A fast transport is..."', tokens: ["Plane", "Train", "Snail", "Bicycle"], dist: [0.65, 0.25, 0.01, 0.09] },
+        { prompt: '"To write code, I use..."', tokens: ["Python", "Java", "Pencil", "Hammer"], dist: [0.60, 0.35, 0.04, 0.01] },
+        { prompt: '"The sky is usually..."', tokens: ["Blue", "Azure", "Green", "Polka-dot"], dist: [0.85, 0.12, 0.02, 0.01] }
+    ];
+
+    let currentEx = 0, isTrained = false;
+    let studentPDF = [0.25, 0.25, 0.25, 0.25];
+
+    function init() {
+        const tl = document.getElementById('t-layers'), sl = document.getElementById('s-layers');
+        for(let i=0; i<20; i++) { let d=document.createElement('div'); d.className='layer t-layer'; tl.appendChild(d); }
+        for(let i=0; i<6; i++) { let d=document.createElement('div'); d.className='layer s-layer'; sl.appendChild(d); }
+        const mx = document.getElementById('weight-matrix');
+        for(let i=0; i<64; i++) {
+            let c=document.createElement('div'); c.className='weight-cell'; c.id=`w-${i}`;
+            let g=Math.floor(Math.random()*50)+180; c.style.backgroundColor=`rgb(${g},${g},${g+10})`;
+            mx.appendChild(c);
+        }
+        renderBars();
+    }
+
+    function renderBars() {
+        const chart = document.getElementById('bar-chart'), data = dataset[currentEx];
+        chart.innerHTML = '';
+        data.tokens.forEach((name, i) => {
+            const group = document.createElement('div'); group.className = 'bar-group';
+            const bars = document.createElement('div'); bars.className = 'bars';
+            const tBar = document.createElement('div'); tBar.className = 'bar teacher'; tBar.style.height = (data.dist[i]*160)+'px';
+            const sBar = document.createElement('div'); sBar.className = 'bar student'; sBar.id = `s-bar-${i}`; sBar.style.height = (studentPDF[i]*160)+'px';
+            bars.append(tBar, sBar); group.append(bars);
+            const lbl = document.createElement('div'); lbl.className = 'token-name'; lbl.innerText = name;
+            group.append(lbl); chart.append(group);
+        });
+        document.getElementById('prompt-text').innerText = data.prompt;
+        document.getElementById('ex-num').innerText = currentEx + 1;
+    }
+
+    function handleAction() {
+        const btn = document.getElementById('action-btn');
+        if (!isTrained) {
+            studentPDF = [...dataset[currentEx].dist];
+            studentPDF.forEach((v, i) => { document.getElementById(`s-bar-${i}`).style.height = (v*160)+'px'; });
+            document.getElementById('matrix-container').classList.add('bp-active');
+            for(let i=0; i<64; i++) {
+                let r=Math.floor(Math.random()*100)+155;
+                document.getElementById(`w-${i}`).style.backgroundColor = `rgb(${r}, 100, 120)`;
+            }
+            document.getElementById('kl-score').innerText = "0.0008 (Min)";
+            btn.innerText = currentEx < 4 ? "Next Transfer Example" : "Restart Loop";
+            isTrained = true;
+            setTimeout(() => document.getElementById('matrix-container').classList.remove('bp-active'), 600);
+        } else {
+            currentEx = (currentEx + 1) % 5;
+            studentPDF = [0.25, 0.25, 0.25, 0.25];
+            isTrained = false;
+            document.getElementById('kl-score').innerText = (0.8 + Math.random()*0.1).toFixed(4);
+            btn.innerText = "Train on Example";
+            renderBars();
+        }
+    }
+    init();
+</script>
+</body>
+</html>

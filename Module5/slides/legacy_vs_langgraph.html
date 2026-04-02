@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Architecture: ReAct vs. State Graphs</title>
+    <style>
+        :root {
+            --legacy-color: #f59e0b;
+            --modern-color: #10b981;
+            --node-inactive: #f8fafc;
+            --active-glow: #d1fae5;
+            --bg-color: #ffffff;
+            --panel-bg: #f1f5f9;
+            --text-dark: #1e293b;
+            --border: #e2e8f0;
+            --code-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #f8fafc;
+            color: var(--text-dark);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #slide-container {
+            width: 1350px;
+            max-height: 98vh;
+            background: var(--bg-color);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border);
+        }
+
+        .header { border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 20px; }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            flex-grow: 1;
+            min-height: 0;
+            align-items: stretch;
+        }
+
+        .viz-panel {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-height: 0;
+        }
+
+        .panel-title { text-align: center; font-weight: bold; font-size: 0.85rem; text-transform: uppercase; color: #64748b; }
+
+        .code-snippet {
+            background: var(--code-bg);
+            color: #334155;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.62rem;
+            line-height: 1.35;
+            border: 1px solid var(--border);
+            border-left: 5px solid #cbd5e1;
+            white-space: pre;
+            overflow-x: auto;
+            height: 220px;
+        }
+        .legacy-border { border-left-color: var(--legacy-color); }
+        .modern-border { border-left-color: var(--modern-color); }
+
+        .func { color: #2563eb; }
+        .string { color: #0891b2; }
+        .comment { color: #94a3b8; font-style: italic; }
+        .prompt-text { color: #dc2626; font-weight: bold; }
+
+        .diagram-area {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            height: 150px;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        @keyframes dash { to { stroke-dashoffset: -50; } }
+        @keyframes flowLegacy { 0% { left: 240px; top: 70px; opacity: 1; } 100% { left: 90px; top: 70px; opacity: 1; } }
+        @keyframes flowModern { 0% { left: 260px; top: 115px; opacity: 1; } 100% { left: 130px; top: 75px; opacity: 1; } }
+
+        .edge { stroke: #cbd5e1; stroke-width: 2; fill: none; transition: stroke 0.3s; }
+        .edge.active { stroke: var(--modern-color); stroke-width: 3; }
+        .edge-animated-legacy { stroke-dasharray: 8 4; animation: dash 1s infinite linear; stroke: #f97316; }
+
+        .packet {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: #fff;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 10;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .packet-legacy { border: 2px solid var(--legacy-color); color: var(--legacy-color); }
+        .packet-modern { border: 2px solid var(--modern-color); color: var(--modern-color); }
+        .animate-l { display: flex; animation: flowLegacy 1.2s ease-in-out forwards; }
+        .animate-m { display: flex; animation: flowModern 1.2s ease-in-out forwards; }
+
+        .legacy-node {
+            position: absolute;
+            padding: 6px 12px;
+            border: 2px solid var(--legacy-color);
+            background: #fffbeb;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .graph-node {
+            position: absolute;
+            padding: 8px 14px;
+            border: 2px solid var(--border);
+            background: var(--node-inactive);
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            transition: all 0.3s;
+            color: #64748b;
+        }
+        .graph-node.active {
+            border-color: var(--modern-color);
+            background: var(--active-glow);
+            color: var(--modern-color);
+            box-shadow: 0 0 10px var(--active-glow);
+        }
+
+        .execution-log {
+            height: 120px;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.65rem;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+            flex-shrink: 0;
+        }
+
+        .sim-btn {
+            background: #0f172a;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: auto;
+        }
+        .sim-btn:disabled { opacity: 0.4; }
+    </style>
+</head>
+<body>
+
+<div id="slide-container">
+    <div class="header">
+        <h2 style="margin:0">Agent Architecture: Functional Comparison</h2>
+        <p style="margin:0; font-size: 0.85rem; color: #64748b;">Deconstructing how queries trigger internal tool-calling loops.</p>
+    </div>
+
+    <div class="main-layout">
+        <div class="viz-panel">
+            <div class="panel-title">Legacy: ReAct Prompt Logic</div>
+            <div class="code-snippet legacy-border"><span class="prompt-text">Answer the following questions:
+{tools}
+Use the format:
+Thought: ... Action: tool_name
+Observation: tool_result</span>
+
+agent = <span class="func">create_react_agent</span>(llm, tools, prompt)
+
+executor = <span class="func">AgentExecutor</span>(
+    agent=agent,
+    tools=tools,
+    verbose=True
+)
+executor.<span class="func">invoke</span>({<span class="string">"input"</span>: <span class="string">"What is the weather in NYC?"</span>})</div>
+
+            <div class="diagram-area">
+                <svg width="100%" height="100%">
+                    <defs><marker id="l-arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="var(--legacy-color)"/></marker></defs>
+                    <path id="le1" d="M 110 70 L 180 70" stroke="var(--legacy-color)" marker-end="url(#l-arr)" stroke-width="2.5"/>
+                    <path d="M 210 95 L 210 125 L 90 125 L 90 95" stroke="var(--legacy-color)" stroke-width="2.5" marker-end="url(#l-arr)" fill="none"/>
+                </svg>
+                <div class="legacy-node" style="left:55px; top:55px;">LLM Node</div>
+                <div class="legacy-node" style="left:185px; top:55px;">Tools</div>
+                <div class="packet packet-legacy" id="p-leg">📄</div>
+            </div>
+
+            <div class="execution-log" id="legacy-log">> Standing by...</div>
+            <button class="sim-btn" id="leg-btn" onclick="runLegacy()">Run ReAct Loop</button>
+        </div>
+
+        <div class="viz-panel">
+            <div class="panel-title">Modern: State-Graph Cycles</div>
+            <div class="code-snippet modern-border">llm_with_tools = llm.<span class="func">bind_tools</span>(tools)
+
+<span class="func">def</span> <span class="func">call_model</span>(state):
+    <span class="comment"># Invocation happens inside the node</span>
+    response = llm_with_tools.<span class="func">invoke</span>(state[<span class="string">"messages"</span>])
+    <span class="func">return</span> {<span class="string">"messages"</span>: [response]}
+
+workflow = <span class="func">StateGraph</span>(MessagesState)
+workflow.<span class="func">add_node</span>(<span class="string">"agent"</span>, call_model)
+workflow.<span class="func">add_node</span>(<span class="string">"tools"</span>, <span class="func">ToolNode</span>(tools))</div>
+
+            <div class="diagram-area">
+                <svg width="100%" height="100%">
+                    <defs>
+                        <marker id="m-arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1"/></marker>
+                        <marker id="m-arr-a" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="var(--modern-color)"/></marker>
+                    </defs>
+                    <path id="e1" class="edge" d="M 30 30 L 80 60" marker-end="url(#m-arr)"/>
+                    <path id="e2" class="edge" d="M 160 80 L 210 110" marker-end="url(#m-arr)"/>
+                    <path id="e3" class="edge" d="M 250 135 L 250 142 L 120 142 L 120 95" marker-end="url(#m-arr)"/>
+                    <path id="e4" class="edge" d="M 160 60 L 280 30" marker-end="url(#m-arr)"/>
+                </svg>
+                <div class="graph-node" style="left:10px; top:10px; font-size: 0.6rem;" id="n-start">START</div>
+                <div class="graph-node" style="left:85px; top:60px;" id="n-agent">Agent Node</div>
+                <div class="graph-node" style="left:210px; top:105px;" id="n-tool">Tool Node</div>
+                <div class="graph-node" style="left:285px; top:10px; border-color:#94a3b8; font-size: 0.6rem;" id="n-end">END</div>
+                <div class="packet packet-modern" id="p-mod">📥</div>
+            </div>
+
+            <div class="execution-log" id="modern-log">> Standing by...</div>
+            <button class="sim-btn" id="mod-btn" onclick="runModern()">Run State Stream</button>
+        </div>
+    </div>
+
+    <div style="margin-top: 15px; text-align: center;">
+        <button onclick="location.reload()" style="background:transparent; color:#64748b; border:1px solid #cbd5e1; padding: 5px 15px; cursor:pointer; border-radius:4px;">Reset Benchmark</button>
+    </div>
+</div>
+
+<script>
+    function updModEdge(id, act) {
+        const e = document.getElementById(id);
+        if(act) { e.classList.add('active'); e.setAttribute('marker-end', 'url(#m-arr-a)'); }
+        else { e.classList.remove('active'); e.setAttribute('marker-end', 'url(#m-arr)'); }
+    }
+
+    function runLegacy() {
+        const btn = document.getElementById('leg-btn');
+        const log = document.getElementById('legacy-log');
+        const pack = document.getElementById('p-leg');
+        const edge = document.getElementById('le1');
+
+        btn.disabled = true;
+        log.innerHTML = "> System: Initializing ReAct Prompt Template...";
+        setTimeout(() => {
+            log.innerHTML += "<br><span style='color:var(--legacy-color)'>LLM Output: Thought: I need the weather. Action: get_weather('NYC')</span>";
+            setTimeout(() => {
+                pack.classList.add('animate-l');
+                edge.classList.add('edge-animated-legacy');
+                log.innerHTML += "<br>> Executing Python function. Found Result.";
+                setTimeout(() => {
+                    pack.classList.remove('animate-l');
+                    edge.classList.remove('edge-animated-legacy');
+                    log.innerHTML += "<br>> Injecting Observation: 'Sunny, 72F' back into prompt.";
+                    log.innerHTML += "<br>> Final LLM call (recursion step 2)...";
+                    btn.disabled = false;
+                }, 1200);
+            }, 1000);
+        }, 1000);
+    }
+
+    function runModern() {
+        const btn = document.getElementById('mod-btn');
+        const log = document.getElementById('modern-log');
+        const pack = document.getElementById('p-mod');
+
+        btn.disabled = true;
+        log.innerHTML = "> Entry point: agent";
+        updModEdge('e1', true); document.getElementById('n-start').classList.add('active');
+
+        setTimeout(() => {
+            document.getElementById('n-start').classList.remove('active'); updModEdge('e1', false);
+            document.getElementById('n-agent').classList.add('active');
+            log.innerHTML += "<br>> call_model() -> llm_with_tools.invoke()";
+
+            setTimeout(() => {
+                log.innerHTML += "<br><span style='color:var(--modern-color)'>State: AIMessage(tool_calls=[{'name': 'get_weather', 'args': {'loc': 'NYC'}}])</span>";
+                updModEdge('e2', true);
+                setTimeout(() => {
+                    document.getElementById('n-agent').classList.remove('active'); updModEdge('e2', false);
+                    document.getElementById('n-tool').classList.add('active');
+                    log.innerHTML += "<br>> ToolNode: processing request";
+
+                    setTimeout(() => {
+                        pack.classList.add('animate-m');
+                        updModEdge('e3', true);
+                        log.innerHTML += "<br>> State update: new ToolMessage written";
+
+                        setTimeout(() => {
+                            pack.classList.remove('animate-m');
+                            updModEdge('e3', false); document.getElementById('n-agent').classList.add('active');
+                            log.innerHTML += "<br>> Agent: final response based on tool data";
+
+                            setTimeout(() => {
+                                updModEdge('e4', true); document.getElementById('n-agent').classList.remove('active');
+                                document.getElementById('n-end').classList.add('active');
+                                log.innerHTML += "<br>> Stream finished.";
+                                btn.disabled = false;
+                            }, 1200);
+                        }, 1200);
+                    }, 1000);
+                }, 1000);
+            }, 1200);
+        }, 800);
+    }
+</script>
+</body>
+</html>
