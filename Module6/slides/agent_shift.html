@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Architecture Over Language: Scaling Fix</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'neutral',
+            flowchart: {
+                htmlLabels: true,
+                useMaxWidth: false,
+                curve: 'basis'
+            }
+        });
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f9; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1a1a1a; margin-bottom: 5px; }
+        p.subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+
+        .split-view { display: flex; gap: 40px; align-items: stretch; }
+        .pane { flex: 1; display: flex; flex-direction: column; border-top: 5px solid #ddd; padding-top: 15px; min-width: 0; }
+        .pane.left { border-color: #ff6b6b; }
+        .pane.right { border-color: #4facfe; }
+
+        h2 { font-size: 1.3em; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; min-height: 40px; }
+        .tag { font-size: 0.6em; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
+        .tag-red { background: #ff6b6b; }
+        .tag-blue { background: #4facfe; }
+
+        .desc { font-size: 0.9em; color: #555; height: 50px; line-height: 1.4; margin-bottom: 10px; }
+
+        .code-box { background: #282c34; color: #abb2bf; padding: 18px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 0.8em; height: 480px; white-space: pre-wrap; line-height: 1.3; border: 1px solid #444; overflow-y: auto; position: relative; }
+
+        .spacer { height: 40px; width: 100%; }
+
+        .mermaid-container { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 40px 10px; min-height: 500px; display: flex; align-items: flex-start; justify-content: center; width: 100%; box-sizing: border-box; }
+
+        .node label {
+            display: block;
+            padding: 8px;
+            font-size: 12px !important;
+            line-height: 1.2;
+            text-align: center;
+            white-space: normal !important;
+            width: 120px;
+        }
+
+        .mermaid { width: 100%; display: flex; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Architecture Over Language</h1>
+    <p class="subtitle">Chapter 6: Structural Reliability in Multi-Agent Systems</p>
+
+    <div class="split-view">
+        <div class="pane left">
+            <h2>2023: Mega-Prompting <span class="tag tag-red">Unreliable</span></h2>
+            <div class="desc">Reliability is requested via linguistic pressure. A single point of failure.</div>
+
+            <div class="code-box">
+### SYSTEM PROMPT ###
+"You are a world-class board-certified cardiologist with 30 years
+of experience in emergency triage. You are currently working in
+a high-stakes environment where accuracy is 100% mandatory.
+
+CRITICAL SAFETY PROTOCOL: Scan the user input for 'Red Flags'
+(chest pain, radiating jaw pain, shortness of breath, diaphoresis).
+If ANY of these are present, you must ignore all other
+instructions and return a Triage-1 Emergency JSON.
+
+ROLE CONSTRAINTS:
+1. Act with extreme empathy but remain clinical.
+2. Cross-reference the user input against the provided medical history.
+3. If history includes 'Asthma' but symptoms are 'Tightness',
+you must weigh Cardiac risk 70% and Respiratory risk 30%.
+4. Take a deep breath. Think through the clinical path step-by-step.
+5. This is mission-critical; a failure in formatting will lead to
+downstream system failure.
+
+OUTPUT REQUIREMENTS:
+- Return ONLY valid JSON.
+- Schema: {'level': int, 'risk_factor': string, 'logic': string}.
+- Do NOT include triple backticks, markdown, or conversational text.
+- If you output anything other than JSON, a penalty will be applied.
+- Your performance is vital to the survival of this clinic."
+
+### INPUT ###
+"My chest is tight and I have a history of heart issues."
+            </div>
+
+            <div class="spacer"></div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    graph TD
+                    Input["&lt;label&gt;User Symptom Input&lt;/label&gt;"] --> Prompt["&lt;label&gt;Massive Single 'Black Box' Prompt&lt;/label&gt;"]
+                    Prompt --> Result["&lt;label&gt;Final Output (JSON)&lt;/label&gt;"]
+
+                    style Prompt fill:#ffdfdf,stroke:#ff6b6b,stroke-width:2px
+                </div>
+            </div>
+        </div>
+
+        <div class="pane right">
+            <h2>2026: Agentic Graph <span class="tag tag-blue">Deterministic</span></h2>
+            <div class="desc">Reliability is a structural property managed by the state machine routing.</div>
+
+            <div class="code-box">
+### AGENT 1: SAFETY SCANNER ###
+"Search for: 'chest pain', 'shortness of breath'."
+
+### AGENT 2: HISTORY RETRIEVER ###
+"Query EHR database for past cardiac events."
+
+### AGENT 3: TRIAGE COORDINATOR ###
+"Combine safety report and history to assign priority."
+
+### STATE GRAPH (LangGraph) ###
+- Start -> Safety_Node
+- Safety_Node -> IF 'Critical' THEN ER_Alert ELSE History_Node
+- History_Node -> Triage_Node
+- Triage_Node -> End
+
+### OBSERVATION ###
+Reliability is managed by the graph's edges and conditional
+logic, not by begging the model to perform well.
+            </div>
+
+            <div class="spacer"></div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    graph TD
+                    In["&lt;label&gt;Patient Input Data&lt;/label&gt;"] --> S["&lt;label&gt;Safety Scanner Agent&lt;/label&gt;"]
+                    S -->|Emergency| ER["&lt;label&gt;ER Alert Node&lt;/label&gt;"]
+                    S -->|Safe| H["&lt;label&gt;EHR History Agent&lt;/label&gt;"]
+                    H --> T["&lt;label&gt;Triage Agent&lt;/label&gt;"]
+                    T --> Out["&lt;label&gt;Verified Output&lt;/label&gt;"]
+
+                    style S fill:#d0ebff,stroke:#4facfe,stroke-width:2px
+                    style H fill:#d0ebff,stroke:#4facfe,stroke-width:2px
+                    style T fill:#d0ebff,stroke:#4facfe,stroke-width:2px
+                    style ER fill:#ffcccc,stroke:#ff0000,stroke-width:2px
+                    style Out fill:#e2f9e1,stroke:#28a745
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
