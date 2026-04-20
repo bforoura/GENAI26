@@ -25,20 +25,17 @@ gemma2:2b                             8ccf136fdd52    1.6 GB    3 months ago
 Servers
 =========================================
 (1) Open a terminal window and install the following embedding model for the RAG agent:
-   
-    ollama pull nomic-embed-text:latest 
+    ==> ollama pull nomic-embed-text:latest 
 
 (1) Open your browser and check http://localhost:11434 to see if ollama server is running.
     If not, open up a terminal (command prompt) window and type:   
-   
-    ollama serve
+    ==> ollama serve
 
-(2) To run LangFlow, open a terminal and type
-    
-langflow run
+(2) To run LangFlow, open a terminal and type:
+    ==> langflow run
 
-    Give it some time and then access the builder environment at:
-    http://localhost:7860
+    Give the server some time to get started; then access LangFlow's visual builder at:
+    ==> http://localhost:7860
     
 
 
@@ -48,8 +45,6 @@ Use this model: qwen2.5:7b
 
 Ask the LLM:
 Sally has 3 brothers. Each of Sally's brothers has 2 sisters. How many sisters does Sally have?
-
-
 
 
 
