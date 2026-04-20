@@ -2,9 +2,11 @@ My Ollama Models
 ================
 C:\Users\bforo>ollama list
                                            
+nomic-embed-text:latest               0a109f422b47    274 MB    23 hours ago
+mxbai-embed-large:latest              468836162de7    669 MB    2 months ago
+
 llama3.2:3b                           a80c4f17acd5    2.0 GB    13 hours ago
 qwen2.5:7b                            845dbda0ea48    4.7 GB    18 hours ago
-nomic-embed-text:latest               0a109f422b47    274 MB    23 hours ago
 MFDoom/deepseek-r1-tool-calling:7b    b167d8c92313    4.7 GB    3 weeks ago
 qwen2.5-coder:14b                     9ec8897f747e    9.0 GB    3 weeks ago
 moondream:latest                      55fc3abd3867    1.7 GB    3 weeks ago
@@ -16,10 +18,28 @@ phi3.5:latest                         61819fb370a3    2.2 GB    5 weeks ago
 llama3.1:latest                       46e0c10c039e    4.9 GB    5 weeks ago
 qwen2.5-coder:3b                      f72c60cabf62    1.9 GB    2 months ago
 qwen2.5-coder:7b                      dae161e27b0e    4.7 GB    2 months ago
-mxbai-embed-large:latest              468836162de7    669 MB    2 months ago
 mapler/gpt2:latest                    bd0a82d72adc    328 MB    2 months ago
 gemma2:2b                             8ccf136fdd52    1.6 GB    3 months ago
 
+
+Servers
+=========================================
+(1) Open a terminal window and install the following embedding model for the RAG agent:
+   
+    ollama pull nomic-embed-text:latest 
+
+(1) Open your browser and check http://localhost:11434 to see if ollama server is running.
+    If not, open up a terminal (command prompt) window and type:   
+   
+    ollama serve
+
+(2) To run LangFlow, open a terminal and type
+    
+langflow run
+
+    Give it some time and then access the builder environment at:
+    http://localhost:7860
+    
 
 
 Chat Agent
@@ -89,10 +109,6 @@ RAG Agent
 =========
 
 Use this LLM: llama3.2:3b
-
-For embedding model for Chroma DB:
-ollama pull nomic-embed-text:latest 
-
 
 In the Prompt Template type:
 
